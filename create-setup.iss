@@ -41,8 +41,9 @@ VersionInfoCopyright=Copyright (c) 2026 {#MyAppPublisher}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern dark
-Compression=lzma2
-SolidCompression=yes
+SolidCompression=no
+Compression=zip
+InternalCompressLevel=normal
 
 PrivilegesRequired=lowest
 AppMutex=NESEmulatorAppMutex
