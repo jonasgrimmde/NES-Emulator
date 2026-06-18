@@ -1,12 +1,80 @@
 const { spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
+const https = require("https");
 const path = require("path");
 
 const rootDir = path.join(__dirname, "..");
 const packagePath = path.join(rootDir, "package.json");
 const lockPath = path.join(rootDir, "package-lock.json");
 const apiVersion = "2026-03-10";
+const useColor = process.stdout.isTTY || process.env.FORCE_COLOR;
+const colorCodes = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  bold: "\x1b[1m",
+};
+
+function color(name, value) {
+  if (!useColor) {
+    return String(value);
+  }
+  return `${colorCodes[name]}${value}${colorCodes.reset}`;
+}
+
+function formatDuration(startedAt) {
+  const seconds = (Date.now() - startedAt) / 1000;
+  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function formatBytes(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = Number(bytes) || 0;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function logHeader(text) {
+  console.log("");
+  console.log(color("bold", color("cyan", `== ${text} ==`)));
+}
+
+function logStep(text) {
+  console.log(`${color("blue", ">")} ${text}`);
+}
+
+function logSuccess(text) {
+  console.log(`${color("green", "OK")} ${text}`);
+}
+
+function logInfo(label, value) {
+  console.log(`${color("dim", label.padEnd(14))} ${value}`);
+}
+
+function logProgress(label, current, total, lastText) {
+  const percent = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+  const barWidth = 24;
+  const filled = Math.round((percent / 100) * barWidth);
+  const bar = `${"#".repeat(filled)}${"-".repeat(barWidth - filled)}`;
+  const text = `${label} ${color("cyan", `[${bar}]`)} ${percent.toFixed(1).padStart(5)}% ${formatBytes(current)} / ${formatBytes(total)}`;
+  if (process.stdout.isTTY) {
+    process.stdout.write(`\r${text}`);
+    return text;
+  }
+  if (text !== lastText) {
+    console.log(text);
+  }
+  return text;
+}
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -17,6 +85,8 @@ function writeJson(filePath, data) {
 }
 
 function run(command, args, options = {}) {
+  const startedAt = Date.now();
+  logStep(`${command} ${args.join(" ")}`);
   const result = spawnSync(command, args, {
     cwd: rootDir,
     stdio: "inherit",
@@ -26,6 +96,7 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed.`);
   }
+  logSuccess(`${command} finished in ${formatDuration(startedAt)}`);
 }
 
 function runCapture(command, args) {
@@ -196,7 +267,9 @@ async function deleteExistingAsset(token, release, assetName) {
   if (!asset) {
     return;
   }
+  logStep(`Delete existing asset ${assetName}`);
   await githubRequest(token, asset.url, { method: "DELETE" });
+  logSuccess(`Deleted ${assetName}`);
 }
 
 async function uploadAsset(token, release, filePath, contentType) {
@@ -204,28 +277,87 @@ async function uploadAsset(token, release, filePath, contentType) {
   await deleteExistingAsset(token, release, assetName);
   const uploadUrl = release.upload_url.replace(/\{.*$/, "");
   const url = `${uploadUrl}?name=${encodeURIComponent(assetName)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Accept": "application/vnd.github+json",
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": contentType,
-      "Content-Length": String(fs.statSync(filePath).size),
-      "X-GitHub-Api-Version": apiVersion,
-      "User-Agent": "nes-emulator-release-script",
-    },
-    body: fs.readFileSync(filePath),
+  const size = fs.statSync(filePath).size;
+  logStep(`Upload ${assetName} (${formatBytes(size)})`);
+  const startedAt = Date.now();
+  const data = await uploadAssetWithProgress({
+    token,
+    url,
+    filePath,
+    contentType,
+    label: `Upload ${assetName}`,
+    size,
   });
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    const message = data && data.message ? data.message : response.statusText;
-    throw new Error(`Upload ${assetName} failed: ${response.status} ${message}`);
+  if (process.stdout.isTTY) {
+    process.stdout.write("\n");
   }
+  logSuccess(`Uploaded ${assetName} in ${formatDuration(startedAt)}`);
   return data;
 }
 
+function uploadAssetWithProgress({ token, url, filePath, contentType, label, size }) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const request = https.request({
+      method: "POST",
+      protocol: parsedUrl.protocol,
+      hostname: parsedUrl.hostname,
+      path: `${parsedUrl.pathname}${parsedUrl.search}`,
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": contentType,
+        "Content-Length": String(size),
+        "X-GitHub-Api-Version": apiVersion,
+        "User-Agent": "nes-emulator-release-script",
+      },
+    }, (response) => {
+      let responseText = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        responseText += chunk;
+      });
+      response.on("end", () => {
+        let data = null;
+        if (responseText) {
+          try {
+            data = JSON.parse(responseText);
+          } catch (error) {
+            reject(new Error(`GitHub returned invalid JSON while uploading ${path.basename(filePath)}.`));
+            return;
+          }
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          const message = data && data.message ? data.message : response.statusMessage;
+          reject(new Error(`Upload ${path.basename(filePath)} failed: ${response.statusCode} ${message}`));
+          return;
+        }
+        resolve(data);
+      });
+    });
+
+    request.on("error", reject);
+
+    let uploaded = 0;
+    let lastProgressAt = 0;
+    let lastText = "";
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => {
+      uploaded += chunk.length;
+      const now = Date.now();
+      if (now - lastProgressAt > 150 || uploaded === size) {
+        lastText = logProgress(label, uploaded, size, lastText);
+        lastProgressAt = now;
+      }
+    });
+    stream.on("error", reject);
+    stream.pipe(request);
+  });
+}
+
 async function main() {
+  const releaseStartedAt = Date.now();
+  logHeader("NES Emulator release");
   const options = parseArgs();
   const pkgBefore = readJson(packagePath);
   const owner = process.env.GITHUB_OWNER || (pkgBefore.release && pkgBefore.release.owner);
@@ -235,9 +367,17 @@ async function main() {
   }
 
   const nextVersion = options.version || bumpVersion(pkgBefore.version, options.bump);
+  logInfo("Repository", `${owner}/${repo}`);
+  logInfo("Version", `${pkgBefore.version} -> ${nextVersion}`);
+  logInfo("Mode", `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`);
+
+  logHeader("Prepare files");
+  logStep("Update package version");
   updatePackageVersion(nextVersion);
+  logSuccess(`package.json/package-lock.json set to ${nextVersion}`);
   const pkg = readJson(packagePath);
 
+  logHeader("Build");
   run("npm", ["run", "clean"]);
   run("npm", ["run", "pack"]);
   run("npm", ["run", "setup"]);
@@ -246,7 +386,9 @@ async function main() {
   if (!fs.existsSync(setupPath)) {
     throw new Error(`Setup file not found: ${setupPath}`);
   }
+  logInfo("Setup", `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`);
 
+  logHeader("Manifest");
   const manifest = createLatestManifest({
     pkg,
     setupPath,
@@ -254,12 +396,18 @@ async function main() {
     owner,
     repo,
   });
+  logSuccess(`Created ${path.relative(rootDir, manifest.manifestPath)}`);
+  logInfo("SHA256", manifest.sha256);
 
+  logHeader("GitHub");
+  logStep("Resolve GitHub token");
   const token = getGitHubToken();
   if (!token) {
     throw new Error("GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.");
   }
+  logSuccess("GitHub auth available");
 
+  logStep(`Create or reuse release ${manifest.tag}`);
   const release = await getOrCreateRelease({
     token,
     owner,
@@ -269,18 +417,21 @@ async function main() {
     draft: options.draft,
     prerelease: options.prerelease,
   });
+  logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
 
   await uploadAsset(token, release, setupPath, "application/vnd.microsoft.portable-executable");
   await uploadAsset(token, release, manifest.manifestPath, "application/x-yaml");
 
+  logHeader("Done");
   console.log("");
-  console.log(`Released NES Emulator ${nextVersion}`);
-  console.log(`Tag: ${manifest.tag}`);
-  console.log(`Setup: ${manifest.setupName}`);
-  console.log(`SHA256: ${manifest.sha256}`);
+  logSuccess(`Released NES Emulator ${nextVersion} in ${formatDuration(releaseStartedAt)}`);
+  logInfo("Tag", manifest.tag);
+  logInfo("Setup", manifest.setupName);
+  logInfo("SHA256", manifest.sha256);
 }
 
 main().catch((error) => {
-  console.error(error.message || error);
+  console.error("");
+  console.error(`${color("red", "FAILED")} ${error.message || error}`);
   process.exit(1);
 });
