@@ -12,6 +12,7 @@
     "setup": "node scripts/build-inno.js",
     "dist": "npm run pack && npm run setup",
     "release": "node scripts/release.js",
+    "patch": "node scripts/release.js --patch",
     "repair:electron": "node node_modules/electron/install.js",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },

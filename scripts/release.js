@@ -120,12 +120,13 @@ function runStatus(command, args, options = {}) {
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    bump: "patch",
+    bump: "minor",
     draft: false,
     prerelease: false,
   };
   for (const arg of args) {
     if (arg === "--no-bump") options.bump = "none";
+    if (arg === "--patch") options.bump = "patch";
     if (arg === "--minor") options.bump = "minor";
     if (arg === "--major") options.bump = "major";
     if (arg === "--draft") options.draft = true;
