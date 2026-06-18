@@ -29,7 +29,9 @@ function color(name, value) {
 
 function formatDuration(startedAt) {
   const seconds = (Date.now() - startedAt) / 1000;
-  return seconds < 60 ? `${seconds.toFixed(1)}s` : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  return seconds < 60
+    ? `${seconds.toFixed(1)}s`
+    : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
 function formatBytes(bytes) {
@@ -83,14 +85,20 @@ function readJson(filePath) {
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
-
+function commandForSpawn(command) {
+  if (process.platform !== "win32") return command;
+  if (command === "npm" || command === "npx" || command === "gh") {
+    return `${command}.cmd`;
+  }
+  return command;
+}
 function run(command, args, options = {}) {
   const startedAt = Date.now();
   logStep(`${command} ${args.join(" ")}`);
-  const result = spawnSync(command, args, {
+  const result = spawnSync(commandForSpawn(command), args, {
     cwd: rootDir,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
     env: Object.assign({}, process.env, options.env || {}),
   });
   if (result.status !== 0) {
@@ -100,19 +108,19 @@ function run(command, args, options = {}) {
 }
 
 function runCapture(command, args) {
-  const result = spawnSync(command, args, {
+  const result = spawnSync(commandForSpawn(command), args, {
     cwd: rootDir,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
   });
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
 function runStatus(command, args, options = {}) {
-  return spawnSync(command, args, {
+  return spawnSync(commandForSpawn(command), args, {
     cwd: rootDir,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
     env: Object.assign({}, process.env, options.env || {}),
   });
 }
@@ -131,7 +139,8 @@ function parseArgs() {
     if (arg === "--major") options.bump = "major";
     if (arg === "--draft") options.draft = true;
     if (arg === "--prerelease") options.prerelease = true;
-    if (arg.startsWith("--version=")) options.version = arg.slice("--version=".length);
+    if (arg.startsWith("--version="))
+      options.version = arg.slice("--version=".length);
   }
   return options;
 }
@@ -176,11 +185,17 @@ function updatePackageVersion(version) {
 }
 
 function fileHash(filePath, algorithm) {
-  return crypto.createHash(algorithm).update(fs.readFileSync(filePath)).digest("hex");
+  return crypto
+    .createHash(algorithm)
+    .update(fs.readFileSync(filePath))
+    .digest("hex");
 }
 
 function fileHashBase64(filePath, algorithm) {
-  return crypto.createHash(algorithm).update(fs.readFileSync(filePath)).digest("base64");
+  return crypto
+    .createHash(algorithm)
+    .update(fs.readFileSync(filePath))
+    .digest("base64");
 }
 
 function yamlQuote(value) {
@@ -228,11 +243,14 @@ function getGitHubToken() {
 }
 
 async function githubRequest(token, url, options = {}) {
-  const headers = Object.assign({
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": apiVersion,
-    "User-Agent": "nes-emulator-release-script",
-  }, options.headers || {});
+  const headers = Object.assign(
+    {
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": apiVersion,
+      "User-Agent": "nes-emulator-release-script",
+    },
+    options.headers || {},
+  );
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -249,10 +267,21 @@ async function githubRequest(token, url, options = {}) {
   return data;
 }
 
-async function getOrCreateRelease({ token, owner, repo, tag, version, draft, prerelease }) {
+async function getOrCreateRelease({
+  token,
+  owner,
+  repo,
+  tag,
+  version,
+  draft,
+  prerelease,
+}) {
   const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
   try {
-    return await githubRequest(token, `${apiBase}/releases/tags/${encodeURIComponent(tag)}`);
+    return await githubRequest(
+      token,
+      `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
+    );
   } catch (error) {
     if (error.status !== 404) {
       throw error;
@@ -272,7 +301,9 @@ async function getOrCreateRelease({ token, owner, repo, tag, version, draft, pre
 }
 
 async function deleteExistingAsset(token, release, assetName) {
-  const asset = (release.assets || []).find((entry) => entry.name === assetName);
+  const asset = (release.assets || []).find(
+    (entry) => entry.name === assetName,
+  );
   if (!asset) {
     return;
   }
@@ -312,15 +343,46 @@ function commitVersionFiles(version) {
     return;
   }
 
-  const unstagedChanges = runStatus("git", ["diff", "--quiet", "--", "package.json", "package-lock.json"]);
-  const stagedChanges = runStatus("git", ["diff", "--cached", "--quiet", "--", "package.json", "package-lock.json"]);
-  const untrackedFiles = runCapture("git", ["ls-files", "--others", "--exclude-standard", "--", "package.json", "package-lock.json"]);
-  if (unstagedChanges.status === 0 && stagedChanges.status === 0 && !untrackedFiles) {
-    logStep("Skip commit because package.json and package-lock.json did not change.");
+  const unstagedChanges = runStatus("git", [
+    "diff",
+    "--quiet",
+    "--",
+    "package.json",
+    "package-lock.json",
+  ]);
+  const stagedChanges = runStatus("git", [
+    "diff",
+    "--cached",
+    "--quiet",
+    "--",
+    "package.json",
+    "package-lock.json",
+  ]);
+  const untrackedFiles = runCapture("git", [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+    "--",
+    "package.json",
+    "package-lock.json",
+  ]);
+  if (
+    unstagedChanges.status === 0 &&
+    stagedChanges.status === 0 &&
+    !untrackedFiles
+  ) {
+    logStep(
+      "Skip commit because package.json and package-lock.json did not change.",
+    );
     return;
   }
 
-  const addResult = runStatus("git", ["add", "--", "package.json", "package-lock.json"]);
+  const addResult = runStatus("git", [
+    "add",
+    "--",
+    "package.json",
+    "package-lock.json",
+  ]);
   if (addResult.status !== 0) {
     const details = (addResult.stderr || addResult.stdout || "").trim();
     throw new Error(`Git add failed.${details ? ` ${details}` : ""}`);
@@ -342,46 +404,65 @@ function commitVersionFiles(version) {
   logSuccess(`Committed version files for ${version}`);
 }
 
-function uploadAssetWithProgress({ token, url, filePath, contentType, label, size }) {
+function uploadAssetWithProgress({
+  token,
+  url,
+  filePath,
+  contentType,
+  label,
+  size,
+}) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
-    const request = https.request({
-      method: "POST",
-      protocol: parsedUrl.protocol,
-      hostname: parsedUrl.hostname,
-      path: `${parsedUrl.pathname}${parsedUrl.search}`,
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": contentType,
-        "Content-Length": String(size),
-        "X-GitHub-Api-Version": apiVersion,
-        "User-Agent": "nes-emulator-release-script",
+    const request = https.request(
+      {
+        method: "POST",
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+        path: `${parsedUrl.pathname}${parsedUrl.search}`,
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": contentType,
+          "Content-Length": String(size),
+          "X-GitHub-Api-Version": apiVersion,
+          "User-Agent": "nes-emulator-release-script",
+        },
       },
-    }, (response) => {
-      let responseText = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        responseText += chunk;
-      });
-      response.on("end", () => {
-        let data = null;
-        if (responseText) {
-          try {
-            data = JSON.parse(responseText);
-          } catch (error) {
-            reject(new Error(`GitHub returned invalid JSON while uploading ${path.basename(filePath)}.`));
+      (response) => {
+        let responseText = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          responseText += chunk;
+        });
+        response.on("end", () => {
+          let data = null;
+          if (responseText) {
+            try {
+              data = JSON.parse(responseText);
+            } catch (error) {
+              reject(
+                new Error(
+                  `GitHub returned invalid JSON while uploading ${path.basename(filePath)}.`,
+                ),
+              );
+              return;
+            }
+          }
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            const message =
+              data && data.message ? data.message : response.statusMessage;
+            reject(
+              new Error(
+                `Upload ${path.basename(filePath)} failed: ${response.statusCode} ${message}`,
+              ),
+            );
             return;
           }
-        }
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          const message = data && data.message ? data.message : response.statusMessage;
-          reject(new Error(`Upload ${path.basename(filePath)} failed: ${response.statusCode} ${message}`));
-          return;
-        }
-        resolve(data);
-      });
-    });
+          resolve(data);
+        });
+      },
+    );
 
     request.on("error", reject);
 
@@ -407,16 +488,22 @@ async function main() {
   logHeader("NES Emulator release");
   const options = parseArgs();
   const pkgBefore = readJson(packagePath);
-  const owner = process.env.GITHUB_OWNER || (pkgBefore.release && pkgBefore.release.owner);
-  const repo = process.env.GITHUB_REPO || (pkgBefore.release && pkgBefore.release.repo);
+  const owner =
+    process.env.GITHUB_OWNER || (pkgBefore.release && pkgBefore.release.owner);
+  const repo =
+    process.env.GITHUB_REPO || (pkgBefore.release && pkgBefore.release.repo);
   if (!owner || !repo) {
     throw new Error("Missing release.owner/release.repo in package.json.");
   }
 
-  const nextVersion = options.version || bumpVersion(pkgBefore.version, options.bump);
+  const nextVersion =
+    options.version || bumpVersion(pkgBefore.version, options.bump);
   logInfo("Repository", `${owner}/${repo}`);
   logInfo("Version", `${pkgBefore.version} -> ${nextVersion}`);
-  logInfo("Mode", `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`);
+  logInfo(
+    "Mode",
+    `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`,
+  );
 
   logHeader("Prepare files");
   logStep("Update package version");
@@ -429,11 +516,19 @@ async function main() {
   run("npm", ["run", "pack"]);
   run("npm", ["run", "setup"]);
 
-  const setupPath = path.join(rootDir, "dist", "installer", `NES-Emulator-Setup-${nextVersion}.exe`);
+  const setupPath = path.join(
+    rootDir,
+    "dist",
+    "installer",
+    `NES-Emulator-Setup-${nextVersion}.exe`,
+  );
   if (!fs.existsSync(setupPath)) {
     throw new Error(`Setup file not found: ${setupPath}`);
   }
-  logInfo("Setup", `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`);
+  logInfo(
+    "Setup",
+    `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`,
+  );
 
   logHeader("Manifest");
   const manifest = createLatestManifest({
@@ -450,7 +545,9 @@ async function main() {
   logStep("Resolve GitHub token");
   const token = getGitHubToken();
   if (!token) {
-    throw new Error("GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.");
+    throw new Error(
+      "GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.",
+    );
   }
   logSuccess("GitHub auth available");
 
@@ -466,14 +563,26 @@ async function main() {
   });
   logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
 
-  await uploadAsset(token, release, setupPath, "application/vnd.microsoft.portable-executable");
-  await uploadAsset(token, release, manifest.manifestPath, "application/x-yaml");
+  await uploadAsset(
+    token,
+    release,
+    setupPath,
+    "application/vnd.microsoft.portable-executable",
+  );
+  await uploadAsset(
+    token,
+    release,
+    manifest.manifestPath,
+    "application/x-yaml",
+  );
 
   commitVersionFiles(nextVersion);
 
   logHeader("Done");
   console.log("");
-  logSuccess(`Released NES Emulator ${nextVersion} in ${formatDuration(releaseStartedAt)}`);
+  logSuccess(
+    `Released NES Emulator ${nextVersion} in ${formatDuration(releaseStartedAt)}`,
+  );
   logInfo("Tag", manifest.tag);
   logInfo("Setup", manifest.setupName);
   logInfo("SHA256", manifest.sha256);
