@@ -76,10 +76,33 @@ main {
 }
 
 .app-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1;
+  line-height: 1.2;
   text-align: center;
+}
+
+.footer-credit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.footer-credit-link:hover {
+  text-decoration: underline;
+}
+
+.footer-credit-logo {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+  image-rendering: auto;
 }
 
 header {

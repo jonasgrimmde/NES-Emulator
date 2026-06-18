@@ -47,6 +47,7 @@ const updateDateLabel = document.getElementById("updateDateLabel");
 const updateDate = document.getElementById("updateDate");
 const updateSkip = document.getElementById("updateSkip");
 const updateDownload = document.getElementById("updateDownload");
+const footerCreditLink = document.getElementById("footerCreditLink");
 
 const legacySaveSlotPrefix = "nes-desktop-save-slot-";
 const selectedSlotPrefix = "nes-desktop-selected-save-slot-";
@@ -1367,6 +1368,15 @@ updateDownload.addEventListener("click", async () => {
 updateModal.addEventListener("click", (event) => {
   if (event.target === updateModal) {
     closeUpdateModal();
+  }
+});
+
+footerCreditLink.addEventListener("click", async (event) => {
+  event.preventDefault();
+  try {
+    await window.nesApp.openExternal(footerCreditLink.href);
+  } catch (error) {
+    setStatus(error.message || String(error));
   }
 });
 

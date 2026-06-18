@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nesApp", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
+  openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
   listGameDirectory: (relativeDir) => ipcRenderer.invoke("games:listDirectory", relativeDir),
   listGames: () => ipcRenderer.invoke("games:list"),
   openRomFile: () => ipcRenderer.invoke("games:openFile"),

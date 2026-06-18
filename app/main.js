@@ -632,6 +632,14 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:reset", () => resetSettings());
   ipcMain.handle("settings:defaults", () => getDefaultSettings());
   ipcMain.handle("app:version", () => app.getVersion());
+  ipcMain.handle("app:openExternal", async (_event, url) => {
+    const parsedUrl = new URL(String(url));
+    if (!["https:", "http:"].includes(parsedUrl.protocol)) {
+      throw new Error("External URL is not allowed.");
+    }
+    await shell.openExternal(parsedUrl.toString());
+    return true;
+  });
   ipcMain.handle("updates:check", () => checkForUpdates());
   ipcMain.handle("updates:downloadAndInstall", () => downloadAndInstallUpdate());
   ipcMain.handle("updates:openManualDownload", async () => {
