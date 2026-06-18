@@ -203,11 +203,22 @@ function yamlQuote(value) {
   return JSON.stringify(String(value));
 }
 
-function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
+function createLatestManifest({
+  pkg,
+  setupPath,
+  portablePath,
+  version,
+  owner,
+  repo,
+}) {
   const setupName = path.basename(setupPath);
   const tag = `v${version}`;
   const releaseDate = new Date().toISOString();
   const downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(setupName)}`;
+  const portableName = portablePath ? path.basename(portablePath) : "";
+  const portableUrl = portablePath
+    ? `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(portableName)}`
+    : "";
   const size = fs.statSync(setupPath).size;
   const sha256 = fileHash(setupPath, "sha256");
   const sha512 = fileHashBase64(setupPath, "sha512");
@@ -217,6 +228,7 @@ function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
     `repo: ${yamlQuote(`${owner}/${repo}`)}`,
     `path: ${yamlQuote(setupName)}`,
     `url: ${yamlQuote(downloadUrl)}`,
+    `url-portable: ${yamlQuote(portableUrl)}`,
     `sha256: ${yamlQuote(sha256)}`,
     `sha512: ${yamlQuote(sha512)}`,
     `size: ${size}`,
@@ -627,6 +639,7 @@ async function main() {
   const manifest = createLatestManifest({
     pkg,
     setupPath: setupUploadPath,
+    portablePath,
     version: nextVersion,
     owner,
     repo,
