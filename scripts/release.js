@@ -98,7 +98,8 @@ function run(command, args, options = {}) {
   const result = spawnSync(commandForSpawn(command), args, {
     cwd: rootDir,
     stdio: "inherit",
-    shell: process.platform === "win32" && (command === "npm" || command === "npx"),
+    shell:
+      process.platform === "win32" && (command === "npm" || command === "npx"),
     env: Object.assign({}, process.env, options.env || {}),
   });
   if (result.status !== 0) {
@@ -236,6 +237,94 @@ function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
   };
 }
 
+function createInstallerUploadCopy(setupPath) {
+  const uploadPath = path.join(
+    rootDir,
+    "dist",
+    "installer",
+    "NES-Emulator-Windows-Setup.exe",
+  );
+
+  fs.rmSync(uploadPath, { force: true });
+  fs.copyFileSync(setupPath, uploadPath);
+
+  logSuccess(`Created upload installer ${path.relative(rootDir, uploadPath)}`);
+  logInfo(
+    "Installer",
+    `${path.relative(rootDir, uploadPath)} (${formatBytes(fs.statSync(uploadPath).size)})`,
+  );
+
+  return uploadPath;
+}
+function find7Zip() {
+  const candidates = [
+    "7z",
+    "7z.exe",
+    path.join(process.env.ProgramFiles || "", "7-Zip", "7z.exe"),
+    path.join(process.env["ProgramFiles(x86)"] || "", "7-Zip", "7z.exe"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate, ["i"], {
+      encoding: "utf8",
+      shell: candidate === "7z" || candidate === "7z.exe",
+    });
+
+    if (result.status === 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function createPortableArchive() {
+  logHeader("Portable archive");
+
+  const unpackedPath = path.join(rootDir, "dist", "win-unpacked");
+  const archivePath = path.join(
+    rootDir,
+    "dist",
+    "installer",
+    "NES-Emulator-Windows.7z",
+  );
+
+  if (!fs.existsSync(unpackedPath)) {
+    throw new Error(`Unpacked app folder not found: ${unpackedPath}`);
+  }
+
+  fs.rmSync(archivePath, { force: true });
+
+  const sevenZip = find7Zip();
+  if (!sevenZip) {
+    throw new Error(
+      "7-Zip was not found. Install 7-Zip or add 7z.exe to PATH.",
+    );
+  }
+
+  const startedAt = Date.now();
+  logStep(`Create ${path.relative(rootDir, archivePath)}`);
+
+  const result = spawnSync(sevenZip, ["a", "-t7z", "-mx=5", archivePath, "."], {
+    cwd: unpackedPath,
+    stdio: "inherit",
+    shell: sevenZip === "7z" || sevenZip === "7z.exe",
+  });
+
+  if (result.status !== 0) {
+    throw new Error("Creating portable 7z archive failed.");
+  }
+
+  logSuccess(
+    `Created ${path.relative(rootDir, archivePath)} in ${formatDuration(startedAt)}`,
+  );
+  logInfo(
+    "Portable",
+    `${path.relative(rootDir, archivePath)} (${formatBytes(fs.statSync(archivePath).size)})`,
+  );
+
+  return archivePath;
+}
 function getGitHubToken() {
   if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
@@ -516,6 +605,8 @@ async function main() {
   run("npm", ["run", "pack"]);
   run("npm", ["run", "setup"]);
 
+  const portablePath = createPortableArchive();
+
   const setupPath = path.join(
     rootDir,
     "dist",
@@ -530,10 +621,12 @@ async function main() {
     `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`,
   );
 
+  const setupUploadPath = createInstallerUploadCopy(setupPath);
+
   logHeader("Manifest");
   const manifest = createLatestManifest({
     pkg,
-    setupPath,
+    setupPath: setupUploadPath,
     version: nextVersion,
     owner,
     repo,
@@ -566,8 +659,14 @@ async function main() {
   await uploadAsset(
     token,
     release,
-    setupPath,
+    setupUploadPath,
     "application/vnd.microsoft.portable-executable",
+  );
+  await uploadAsset(
+    token,
+    release,
+    portablePath,
+    "application/x-7z-compressed",
   );
   await uploadAsset(
     token,
@@ -585,6 +684,7 @@ async function main() {
   );
   logInfo("Tag", manifest.tag);
   logInfo("Setup", manifest.setupName);
+  logInfo("Portable", path.basename(portablePath));
   logInfo("SHA256", manifest.sha256);
 }
 
