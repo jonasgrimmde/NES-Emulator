@@ -77,13 +77,12 @@ main {
 
 header {
   display: grid;
-  grid-template-columns: clamp(260px, 20vw, 340px) minmax(0, 1fr) clamp(320px, 22vw, 390px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 92px;
 }
 
 .header-center {
-  grid-column: 2;
+  grid-column: 1;
   display: grid;
   justify-items: center;
   align-content: center;
@@ -117,7 +116,7 @@ h1 {
 }
 
 .game-toolbar {
-  width: min(100%, 620px);
+  width: min(100%, 540px);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
