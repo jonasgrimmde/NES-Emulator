@@ -87,7 +87,7 @@ function writeJson(filePath, data) {
 }
 function commandForSpawn(command) {
   if (process.platform !== "win32") return command;
-  if (command === "npm" || command === "npx" || command === "gh") {
+  if (command === "npm" || command === "npx") {
     return `${command}.cmd`;
   }
   return command;
@@ -98,7 +98,7 @@ function run(command, args, options = {}) {
   const result = spawnSync(commandForSpawn(command), args, {
     cwd: rootDir,
     stdio: "inherit",
-    shell: false,
+    shell: process.platform === "win32" && (command === "npm" || command === "npx"),
     env: Object.assign({}, process.env, options.env || {}),
   });
   if (result.status !== 0) {
