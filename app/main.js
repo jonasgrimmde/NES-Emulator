@@ -168,6 +168,10 @@ function getPackageConfig() {
   }
 }
 
+function getWindowTitle() {
+  return `NES Emulator (${app.getVersion()})`;
+}
+
 function getWindowIconPath() {
   return path.join(__dirname, "..", "build", "icons", "app.ico");
 }
@@ -336,8 +340,11 @@ function compareVersions(left, right) {
 function getUpdaterConfig() {
   const packageConfig = getPackageConfig();
   const release = packageConfig.release || {};
+  const owner = process.env.GITHUB_OWNER || release.owner;
+  const repo = process.env.GITHUB_REPO || release.repo;
   return {
     latestUrl: process.env.NES_EMULATOR_LATEST_URL || release.latestUrl,
+    releasesUrl: owner && repo ? `https://github.com/${owner}/${repo}/releases` : null,
   };
 }
 
@@ -349,38 +356,59 @@ async function checkForUpdates() {
       available: false,
       currentVersion,
       error: "Update URL is not configured.",
+      manualUrl: config.releasesUrl,
     };
   }
 
-  const response = await fetch(config.latestUrl, {
-    headers: {
-      "Cache-Control": "no-cache",
-      "User-Agent": "nes-emulator-updater",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Update check failed: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(config.latestUrl, {
+      headers: {
+        "Cache-Control": "no-cache",
+        "User-Agent": "nes-emulator-updater",
+      },
+    });
+    if (!response.ok) {
+      return {
+        available: false,
+        currentVersion,
+        error: `Update check failed: ${response.status} ${response.statusText}`,
+        manualUrl: config.releasesUrl,
+      };
+    }
+
+    const manifest = parseLatestManifest(await response.text());
+    if (!manifest.version || !manifest.url || !manifest.sha256 || !manifest.sha512 || !manifest.path) {
+      return {
+        available: false,
+        currentVersion,
+        error: "Update manifest is incomplete.",
+        manualUrl: config.releasesUrl,
+      };
+    }
+
+    latestUpdate = {
+      currentVersion,
+      latestVersion: manifest.version,
+      releaseDate: manifest.releaseDate || null,
+      url: manifest.url,
+      path: path.basename(manifest.path),
+      sha256: manifest.sha256,
+      sha512: manifest.sha512,
+      size: manifest.size || null,
+      manualUrl: config.releasesUrl,
+    };
+
+    return Object.assign({
+      available: compareVersions(manifest.version, currentVersion) > 0,
+    }, latestUpdate);
+  } catch (error) {
+    return {
+      available: false,
+      currentVersion,
+      error: error.message || String(error),
+      manualUrl: config.releasesUrl,
+    };
   }
-
-  const manifest = parseLatestManifest(await response.text());
-  if (!manifest.version || !manifest.url || !manifest.sha256 || !manifest.sha512 || !manifest.path) {
-    throw new Error("Update manifest is incomplete.");
-  }
-
-  latestUpdate = {
-    currentVersion,
-    latestVersion: manifest.version,
-    releaseDate: manifest.releaseDate || null,
-    url: manifest.url,
-    path: path.basename(manifest.path),
-    sha256: manifest.sha256,
-    sha512: manifest.sha512,
-    size: manifest.size || null,
-  };
-
-  return Object.assign({
-    available: compareVersions(manifest.version, currentVersion) > 0,
-  }, latestUpdate);
 }
 
 function verifyFile(filePath, expectedSha256, expectedSha512) {
@@ -577,7 +605,7 @@ function createWindow() {
     height: 760,
     minWidth: 860,
     minHeight: 560,
-    title: "NES Emulator",
+    title: getWindowTitle(),
     icon: getWindowIconPath(),
     backgroundColor: "#090909",
     autoHideMenuBar: true,
@@ -603,8 +631,17 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:write", (_event, settings) => writeSettings(settings));
   ipcMain.handle("settings:reset", () => resetSettings());
   ipcMain.handle("settings:defaults", () => getDefaultSettings());
+  ipcMain.handle("app:version", () => app.getVersion());
   ipcMain.handle("updates:check", () => checkForUpdates());
   ipcMain.handle("updates:downloadAndInstall", () => downloadAndInstallUpdate());
+  ipcMain.handle("updates:openManualDownload", async () => {
+    const url = getUpdaterConfig().releasesUrl;
+    if (!url) {
+      throw new Error("Manual update URL is not configured.");
+    }
+    await shell.openExternal(url);
+    return true;
+  });
   ipcMain.handle("games:openFile", async () => {
     const result = await dialog.showOpenDialog({
       title: "Open NES ROM",

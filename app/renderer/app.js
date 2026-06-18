@@ -342,21 +342,50 @@ function showUpdateModal(update) {
   updateDate.textContent = update.releaseDate ? formatSavedAt(update.releaseDate) : "Unknown";
   updateDownload.disabled = false;
   setButtonLabel(updateDownload, "Download now");
+  updateDownload.dataset.mode = "download";
   updateModal.hidden = false;
   updateDownload.focus();
 }
 
-async function checkForUpdates() {
+function showUpdateErrorModal(update) {
+  availableUpdate = null;
+  updateMessage.textContent = "The update information could not be loaded. Please download the latest version manually from GitHub.";
+  updateVersion.textContent = update && update.currentVersion ? update.currentVersion : "Unknown";
+  updateDate.textContent = update && update.error ? update.error : "Not available";
+  updateDownload.disabled = false;
+  setButtonLabel(updateDownload, "Open GitHub");
+  updateDownload.dataset.mode = "manual";
+  updateModal.hidden = false;
+  updateDownload.focus();
+}
+
+async function checkForUpdates(options = {}) {
+  const showErrors = Boolean(options.showErrors);
   try {
     const update = await window.nesApp.checkForUpdates();
+    if (update.error) {
+      if (showErrors) {
+        showUpdateErrorModal(update);
+      }
+      return update;
+    }
     if (!update.available) {
+      if (showErrors) {
+        setStatus("No update available.");
+      }
       return;
     }
     availableUpdate = update;
     updateButton.hidden = false;
     showUpdateModal(update);
+    return update;
   } catch (error) {
     console.warn("Update check failed.", error);
+    if (showErrors) {
+      showUpdateErrorModal({
+        error: error.message || String(error),
+      });
+    }
   }
 }
 
@@ -1228,7 +1257,7 @@ updateButton.addEventListener("click", () => {
   if (availableUpdate) {
     showUpdateModal(availableUpdate);
   } else {
-    checkForUpdates();
+    checkForUpdates({ showErrors: true });
   }
 });
 
@@ -1292,6 +1321,15 @@ keyCaptureModal.addEventListener("click", (event) => {
 updateSkip.addEventListener("click", closeUpdateModal);
 
 updateDownload.addEventListener("click", async () => {
+  if (updateDownload.dataset.mode === "manual") {
+    try {
+      await window.nesApp.openManualUpdateDownload();
+      closeUpdateModal();
+    } catch (error) {
+      setStatus(error.message || String(error));
+    }
+    return;
+  }
   updateDownload.disabled = true;
   setButtonLabel(updateDownload, "Downloading...");
   setStatus("Downloading update...");
@@ -1391,6 +1429,12 @@ document.querySelectorAll("[data-button]").forEach((button) => {
 });
 
 async function init() {
+  try {
+    const version = await window.nesApp.getAppVersion();
+    document.title = `NES Emulator (${version})`;
+  } catch (error) {
+    document.title = "NES Emulator";
+  }
   try {
     const result = await window.nesApp.readSettings();
     settings = result.settings;
