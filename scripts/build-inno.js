@@ -1,0 +1,33 @@
+const { spawnSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+
+const scriptPath = path.join(__dirname, "..", "create-setup.iss");
+const candidates = [
+  "ISCC.exe",
+  "ISCC",
+  path.join(process.env["ProgramFiles(x86)"] || "", "Inno Setup 6", "ISCC.exe"),
+  path.join(process.env.ProgramFiles || "", "Inno Setup 6", "ISCC.exe"),
+].filter(Boolean);
+
+const compiler = candidates.find((candidate) => {
+  if (candidate === "ISCC" || candidate === "ISCC.exe") {
+    const result = spawnSync(candidate, ["/?"], { stdio: "ignore", shell: true });
+    return result.status === 0;
+  }
+  return fs.existsSync(candidate);
+});
+
+if (!compiler) {
+  console.error("Inno Setup compiler was not found.");
+  console.error("Install Inno Setup 6 or add ISCC.exe to PATH, then run npm run dist again.");
+  process.exit(1);
+}
+
+const result = spawnSync(compiler, [scriptPath], {
+  cwd: path.join(__dirname, ".."),
+  stdio: "inherit",
+  shell: compiler === "ISCC" || compiler === "ISCC.exe",
+});
+
+process.exit(result.status || 0);

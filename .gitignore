@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+out/
+*.asar
+*.blockmap
+*.exe
+*.msi
+*.msix
+*.nupkg
+*.snap
+*.AppImage
+*.dmg
+*.pkg
+*.deb
+*.rpm
+
+# Local temp/cache
+.temp/
+.cache/
+.tmp/
+tmp/
+temp/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets.*
+credentials.*
+
+# ROMs, BIOS files, TAS/private game data
+*.nes
+*.fds
+*.unf
+*.unif
+*.nsf
+*.sfc
+*.smc
+*.gb
+*.gbc
+*.gba
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+Games/
+Saves/
+TAS/
+app/games/
+web/games/
+public/games/
+
+# Local notes and scratch files
+TODO.txt
+main.todo
+*.todo
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Inno Setup artifacts
+*.iss.bak
+*.setup.log

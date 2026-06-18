@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NES Emulator</title>
+    <link rel="stylesheet" href="../../node_modules/@fortawesome/fontawesome-free/css/all.min.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="header-center">
+          <h1 id="gameTitle">NES Emulator</h1>
+          <div id="status" class="status">Ready.</div>
+          <div class="game-toolbar">
+            <button id="openGames" class="btn folder-btn" type="button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Games</span></button>
+            <button id="openSaves" class="btn folder-btn" type="button"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>Saves</span></button>
+            <button id="openSettings" class="btn folder-btn" type="button"><i class="fa-solid fa-gear" aria-hidden="true"></i><span>Settings</span></button>
+            <button id="updateButton" class="btn btn-warning folder-btn update-btn" type="button" hidden><i class="fa-solid fa-download" aria-hidden="true"></i><span>Update</span></button>
+          </div>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="game-browser" aria-label="Game browser">
+          <div class="browser-actions">
+            <button id="openRom" class="btn btn-primary" type="button"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Open ROM</span></button>
+            <button id="refreshGames" class="btn" type="button"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>Refresh</span></button>
+          </div>
+          <div class="browser-path">
+            <button id="upFolder" class="btn icon-btn" type="button" title="Up one folder"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i><span>Up</span></button>
+            <div id="folderPath" class="path-label" title="Games">Games</div>
+          </div>
+          <div class="browser-title">
+            <span>Library</span>
+            <span id="gameCount">0</span>
+          </div>
+          <div id="gameList" class="game-list" role="listbox" aria-label="Available games"></div>
+        </section>
+        <div id="nes" aria-label="NES emulator screen"></div>
+        <aside>
+          <div class="action-row">
+            <button id="start" class="btn btn-primary"><i class="fa-solid fa-play" aria-hidden="true"></i><span>Start</span></button>
+            <button id="pause" class="btn" disabled><i class="fa-solid fa-pause" aria-hidden="true"></i><span>Pause</span></button>
+            <button id="reset" class="btn" disabled><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reset</span></button>
+          </div>
+          <div class="quick-row">
+            <button id="save" class="btn btn-warning" disabled><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>Quick Save</span></button>
+            <button id="load" class="btn btn-success" disabled><i class="fa-solid fa-upload" aria-hidden="true"></i><span>Quick Load</span></button>
+          </div>
+          <div class="controller-panel" aria-label="NES controllers">
+            <div class="controller-player">
+              <div class="control-group">
+                <div class="control-label">P1 D-Pad</div>
+                <div class="dpad">
+                  <button class="btn up icon-only" data-player="1" data-button="UP" title="Up"><i class="fa-solid fa-caret-up" aria-hidden="true"></i><span>Up</span></button>
+                  <button class="btn left icon-only" data-player="1" data-button="LEFT" title="Left"><i class="fa-solid fa-caret-left" aria-hidden="true"></i><span>Left</span></button>
+                  <button class="btn down icon-only" data-player="1" data-button="DOWN" title="Down"><i class="fa-solid fa-caret-down" aria-hidden="true"></i><span>Down</span></button>
+                  <button class="btn right icon-only" data-player="1" data-button="RIGHT" title="Right"><i class="fa-solid fa-caret-right" aria-hidden="true"></i><span>Right</span></button>
+                </div>
+              </div>
+              <div class="control-group">
+                <div class="control-label">P1 Buttons</div>
+                <div class="ab-pad">
+                  <button class="btn" data-player="1" data-button="B">B</button>
+                  <button class="btn" data-player="1" data-button="A">A</button>
+                </div>
+                <div class="system-row">
+                  <button class="btn compact-btn" data-player="1" data-button="SELECT"><i class="fa-solid fa-circle-dot" aria-hidden="true"></i><span>Select</span></button>
+                  <button class="btn compact-btn" data-player="1" data-button="START"><i class="fa-solid fa-play" aria-hidden="true"></i><span>Start</span></button>
+                </div>
+              </div>
+            </div>
+            <div class="controller-player">
+              <div class="control-group">
+                <div class="control-label">P2 D-Pad</div>
+                <div class="dpad">
+                  <button class="btn up icon-only" data-player="2" data-button="UP" title="Up"><i class="fa-solid fa-caret-up" aria-hidden="true"></i><span>Up</span></button>
+                  <button class="btn left icon-only" data-player="2" data-button="LEFT" title="Left"><i class="fa-solid fa-caret-left" aria-hidden="true"></i><span>Left</span></button>
+                  <button class="btn down icon-only" data-player="2" data-button="DOWN" title="Down"><i class="fa-solid fa-caret-down" aria-hidden="true"></i><span>Down</span></button>
+                  <button class="btn right icon-only" data-player="2" data-button="RIGHT" title="Right"><i class="fa-solid fa-caret-right" aria-hidden="true"></i><span>Right</span></button>
+                </div>
+              </div>
+              <div class="control-group">
+                <div class="control-label">P2 Buttons</div>
+                <div class="ab-pad">
+                  <button class="btn" data-player="2" data-button="B">B</button>
+                  <button class="btn" data-player="2" data-button="A">A</button>
+                </div>
+                <div class="system-row">
+                  <button class="btn compact-btn" data-player="2" data-button="SELECT"><i class="fa-solid fa-circle-dot" aria-hidden="true"></i><span>Select</span></button>
+                  <button class="btn compact-btn" data-player="2" data-button="START"><i class="fa-solid fa-play" aria-hidden="true"></i><span>Start</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <section class="save-panel" aria-label="Save slots">
+            <div class="save-title">
+              <span>Save Slots</span>
+              <span id="slotHint">Choose a slot</span>
+            </div>
+            <div id="slotGrid" class="slot-grid"></div>
+          </section>
+          <section class="keys-panel" aria-label="Keyboard controls">
+            <div class="keys-title">Keyboard</div>
+            <div class="keys-grid">
+              <span>Move</span><kbd>Arrows</kbd><kbd>Num 8/2/4/6</kbd>
+              <span>A</span><kbd>X</kbd><kbd>Num 7</kbd>
+              <span>B</span><kbd>Z / Y</kbd><kbd>Num 9</kbd>
+              <span>Start</span><kbd>Enter</kbd><kbd>Num 1</kbd>
+              <span>Select</span><kbd>Right Ctrl</kbd><kbd>Num 3</kbd>
+              <span>Turbo</span><kbd>S / A</kbd><kbd>-</kbd>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <div id="compatModal" class="modal-backdrop" hidden>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="compatTitle" aria-describedby="compatMessage">
+        <div class="modal-icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></div>
+        <div class="modal-copy">
+          <h2 id="compatTitle">Compatibility warning</h2>
+          <p id="compatMessage">This game may not run correctly.</p>
+          <dl class="modal-meta">
+            <dt>Game</dt><dd id="compatGame">Unknown</dd>
+            <dt>ROM</dt><dd id="compatRom">Unknown</dd>
+          </dl>
+        </div>
+        <div class="modal-actions">
+          <button id="compatCancel" class="btn" type="button"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Cancel</span></button>
+          <button id="compatContinue" class="btn btn-warning" type="button"><i class="fa-solid fa-play" aria-hidden="true"></i><span>Continue anyway</span></button>
+        </div>
+      </section>
+    </div>
+
+    <div id="settingsModal" class="modal-backdrop" hidden>
+      <section class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="modal-icon"><i class="fa-solid fa-gear" aria-hidden="true"></i></div>
+        <div class="modal-copy">
+          <h2 id="settingsTitle">Settings</h2>
+          <div id="settingsPath" class="settings-path"></div>
+        </div>
+
+        <div class="settings-body">
+          <section class="settings-section">
+            <h3>Audio</h3>
+            <label class="settings-row" for="volumeRange">
+              <span>Volume</span>
+              <input id="volumeRange" type="range" min="0" max="100" step="1">
+              <output id="volumeValue" for="volumeRange">80%</output>
+            </label>
+          </section>
+
+          <section class="settings-section">
+            <h3>Video</h3>
+            <label class="settings-row" for="resolutionSelect">
+              <span>Resolution</span>
+              <select id="resolutionSelect">
+                <option value="fit">Fit screen</option>
+                <option value="1x">1x native</option>
+                <option value="2x">2x native</option>
+                <option value="3x">3x native</option>
+                <option value="4x">4x native</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="settings-section">
+            <h3>Autosave</h3>
+            <label class="settings-toggle" for="autosaveEnabled">
+              <span>Auto-Save</span>
+              <input id="autosaveEnabled" type="checkbox">
+            </label>
+          </section>
+
+          <section class="settings-section">
+            <h3>Keybinds</h3>
+            <div id="keybindGrid" class="keybind-grid"></div>
+          </section>
+
+          <section class="settings-section">
+            <h3>Hotkeys</h3>
+            <div id="hotkeyGrid" class="keybind-grid"></div>
+          </section>
+        </div>
+
+        <div class="modal-actions">
+          <button id="settingsDefaults" class="btn" type="button"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i><span>Load defaults</span></button>
+          <button id="settingsCancel" class="btn" type="button"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Cancel</span></button>
+          <button id="settingsSave" class="btn btn-warning" type="button"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>Save</span></button>
+        </div>
+      </section>
+    </div>
+
+    <div id="keyCaptureModal" class="modal-backdrop" hidden>
+      <section class="modal-card key-capture-card" role="dialog" aria-modal="true" aria-labelledby="keyCaptureTitle" aria-describedby="keyCaptureHint">
+        <div class="modal-icon"><i class="fa-solid fa-keyboard" aria-hidden="true"></i></div>
+        <div class="modal-copy">
+          <h2 id="keyCaptureTitle">Type a key</h2>
+          <p id="keyCaptureHint">Press Delete to clear this binding.</p>
+          <kbd id="keyCaptureTarget" class="capture-target">Waiting...</kbd>
+        </div>
+        <div class="modal-actions">
+          <button id="keyCaptureCancel" class="btn" type="button"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Cancel</span></button>
+        </div>
+      </section>
+    </div>
+
+    <div id="updateModal" class="modal-backdrop" hidden>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="updateTitle" aria-describedby="updateMessage">
+        <div class="modal-icon"><i class="fa-solid fa-download" aria-hidden="true"></i></div>
+        <div class="modal-copy">
+          <h2 id="updateTitle">Update available</h2>
+          <p id="updateMessage">A new version is ready to install.</p>
+          <dl class="modal-meta">
+            <dt>Version</dt><dd id="updateVersion">Unknown</dd>
+            <dt>Date</dt><dd id="updateDate">Unknown</dd>
+          </dl>
+        </div>
+        <div class="modal-actions">
+          <button id="updateSkip" class="btn" type="button"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Skip</span></button>
+          <button id="updateDownload" class="btn btn-warning" type="button"><i class="fa-solid fa-download" aria-hidden="true"></i><span>Download now</span></button>
+        </div>
+      </section>
+    </div>
+
+    <script src="../../node_modules/jsnes/dist/jsnes.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
