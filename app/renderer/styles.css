@@ -80,10 +80,16 @@ main {
   justify-content: center;
   align-items: center;
   gap: 4px;
+  min-height: 18px;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1.2;
+  line-height: 1;
   text-align: center;
+}
+
+.app-footer span {
+  display: block;
+  line-height: 1;
 }
 
 .footer-credit-link {
@@ -91,6 +97,7 @@ main {
   align-items: center;
   gap: 4px;
   color: var(--accent);
+  line-height: 1;
   text-decoration: none;
 }
 
@@ -99,10 +106,12 @@ main {
 }
 
 .footer-credit-logo {
-  width: 1em;
-  height: 1em;
+  display: block;
+  width: 12px;
+  height: 12px;
   object-fit: contain;
   image-rendering: auto;
+  transform: translateY(1px);
 }
 
 header {
