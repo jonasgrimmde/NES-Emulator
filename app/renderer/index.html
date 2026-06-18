@@ -17,7 +17,6 @@
             <button id="openGames" class="btn folder-btn" type="button"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Games</span></button>
             <button id="openSaves" class="btn folder-btn" type="button"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>Saves</span></button>
             <button id="openSettings" class="btn folder-btn" type="button"><i class="fa-solid fa-gear" aria-hidden="true"></i><span>Settings</span></button>
-            <button id="updateButton" class="btn btn-warning folder-btn update-btn" type="button"><i class="fa-solid fa-download" aria-hidden="true"></i><span>Update</span></button>
           </div>
         </div>
       </header>
@@ -187,6 +186,14 @@
             <h3>Hotkeys</h3>
             <div id="hotkeyGrid" class="keybind-grid"></div>
           </section>
+
+          <section class="settings-section">
+            <h3>Updates</h3>
+            <div class="settings-command">
+              <span>Manual check</span>
+              <button id="settingsCheckUpdates" class="btn" type="button"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>Check now</span></button>
+            </div>
+          </section>
         </div>
 
         <div class="modal-actions">
@@ -218,8 +225,8 @@
           <h2 id="updateTitle">Update available</h2>
           <p id="updateMessage">A new version is ready to install.</p>
           <dl class="modal-meta">
-            <dt>Version</dt><dd id="updateVersion">Unknown</dd>
-            <dt>Date</dt><dd id="updateDate">Unknown</dd>
+            <dt id="updateVersionLabel">Version</dt><dd id="updateVersion">Unknown</dd>
+            <dt id="updateDateLabel">Date</dt><dd id="updateDate">Unknown</dd>
           </dl>
         </div>
         <div class="modal-actions">

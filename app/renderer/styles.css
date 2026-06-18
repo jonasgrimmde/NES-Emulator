@@ -123,15 +123,11 @@ h1 {
 }
 
 .game-toolbar {
-  width: min(100%, 540px);
+  width: min(100%, 450px);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
-}
-
-.update-btn[hidden] {
-  display: none;
 }
 
 .folder-btn {
@@ -840,6 +836,16 @@ kbd {
   width: 18px;
   height: 18px;
   accent-color: var(--gold);
+}
+
+.settings-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .keybind-grid {

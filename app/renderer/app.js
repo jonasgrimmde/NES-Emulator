@@ -9,7 +9,6 @@ const refreshGamesButton = document.getElementById("refreshGames");
 const openGamesButton = document.getElementById("openGames");
 const openSavesButton = document.getElementById("openSaves");
 const openSettingsButton = document.getElementById("openSettings");
-const updateButton = document.getElementById("updateButton");
 const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
 const resetButton = document.getElementById("reset");
@@ -34,13 +33,17 @@ const hotkeyGrid = document.getElementById("hotkeyGrid");
 const settingsDefaults = document.getElementById("settingsDefaults");
 const settingsCancel = document.getElementById("settingsCancel");
 const settingsSave = document.getElementById("settingsSave");
+const settingsCheckUpdates = document.getElementById("settingsCheckUpdates");
 const keyCaptureModal = document.getElementById("keyCaptureModal");
 const keyCaptureTitle = document.getElementById("keyCaptureTitle");
 const keyCaptureTarget = document.getElementById("keyCaptureTarget");
 const keyCaptureCancel = document.getElementById("keyCaptureCancel");
 const updateModal = document.getElementById("updateModal");
+const updateTitle = document.getElementById("updateTitle");
 const updateMessage = document.getElementById("updateMessage");
+const updateVersionLabel = document.getElementById("updateVersionLabel");
 const updateVersion = document.getElementById("updateVersion");
+const updateDateLabel = document.getElementById("updateDateLabel");
 const updateDate = document.getElementById("updateDate");
 const updateSkip = document.getElementById("updateSkip");
 const updateDownload = document.getElementById("updateDownload");
@@ -337,10 +340,14 @@ function closeUpdateModal() {
 
 function showUpdateModal(update) {
   availableUpdate = update;
+  updateTitle.textContent = "Update available";
   updateMessage.textContent = "A new installer will be downloaded and started.";
+  updateVersionLabel.textContent = "Version";
   updateVersion.textContent = `${update.currentVersion} -> ${update.latestVersion}`;
+  updateDateLabel.textContent = "Date";
   updateDate.textContent = update.releaseDate ? formatSavedAt(update.releaseDate) : "Unknown";
   updateDownload.disabled = false;
+  setButtonLabel(updateSkip, "Skip");
   setButtonLabel(updateDownload, "Download now");
   updateDownload.dataset.mode = "download";
   updateModal.hidden = false;
@@ -349,10 +356,14 @@ function showUpdateModal(update) {
 
 function showUpdateErrorModal(update) {
   availableUpdate = null;
+  updateTitle.textContent = "Update check failed";
   updateMessage.textContent = "The update information could not be loaded. Please download the latest version manually from GitHub.";
+  updateVersionLabel.textContent = "Installed";
   updateVersion.textContent = update && update.currentVersion ? update.currentVersion : "Unknown";
+  updateDateLabel.textContent = "Problem";
   updateDate.textContent = update && update.error ? update.error : "Not available";
   updateDownload.disabled = false;
+  setButtonLabel(updateSkip, "Close");
   setButtonLabel(updateDownload, "Open GitHub");
   updateDownload.dataset.mode = "manual";
   updateModal.hidden = false;
@@ -376,7 +387,6 @@ async function checkForUpdates(options = {}) {
       return;
     }
     availableUpdate = update;
-    updateButton.hidden = false;
     showUpdateModal(update);
     return update;
   } catch (error) {
@@ -1253,14 +1263,6 @@ openSavesButton.addEventListener("click", async () => {
 
 openSettingsButton.addEventListener("click", openSettingsModal);
 
-updateButton.addEventListener("click", () => {
-  if (availableUpdate) {
-    showUpdateModal(availableUpdate);
-  } else {
-    checkForUpdates({ showErrors: true });
-  }
-});
-
 volumeRange.addEventListener("input", () => {
   volumeValue.value = `${volumeRange.value}%`;
 });
@@ -1304,6 +1306,20 @@ settingsSave.addEventListener("click", async () => {
   }
 });
 
+settingsCheckUpdates.addEventListener("click", async () => {
+  settingsCheckUpdates.disabled = true;
+  setButtonLabel(settingsCheckUpdates, "Checking...");
+  try {
+    const update = await checkForUpdates({ showErrors: true });
+    if (update && !update.available && !update.error) {
+      setStatus("No update available.");
+    }
+  } finally {
+    settingsCheckUpdates.disabled = false;
+    setButtonLabel(settingsCheckUpdates, "Check now");
+  }
+});
+
 settingsModal.addEventListener("click", (event) => {
   if (event.target === settingsModal) {
     closeSettingsModal();
@@ -1341,6 +1357,10 @@ updateDownload.addEventListener("click", async () => {
     updateDownload.disabled = false;
     setButtonLabel(updateDownload, "Download now");
     setStatus(error.message || String(error));
+    showUpdateErrorModal({
+      currentVersion: availableUpdate && availableUpdate.currentVersion,
+      error: error.message || String(error),
+    });
   }
 });
 
