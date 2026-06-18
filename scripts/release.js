@@ -194,7 +194,6 @@ function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
     `sha256: ${yamlQuote(sha256)}`,
     `sha512: ${yamlQuote(sha512)}`,
     `size: ${size}`,
-    `minimumVersion: ${yamlQuote("26.1.0")}`,
     `productName: ${yamlQuote(pkg.build && pkg.build.productName ? pkg.build.productName : "NES Emulator")}`,
     "",
   ].join("\n");

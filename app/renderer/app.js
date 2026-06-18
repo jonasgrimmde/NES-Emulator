@@ -348,6 +348,7 @@ function showUpdateModal(update) {
   updateDateLabel.textContent = "Date";
   updateDate.textContent = update.releaseDate ? formatSavedAt(update.releaseDate) : "Unknown";
   updateDownload.disabled = false;
+  updateDownload.hidden = false;
   setButtonLabel(updateSkip, "Skip");
   setButtonLabel(updateDownload, "Download now");
   updateDownload.dataset.mode = "download";
@@ -364,11 +365,27 @@ function showUpdateErrorModal(update) {
   updateDateLabel.textContent = "Problem";
   updateDate.textContent = update && update.error ? update.error : "Not available";
   updateDownload.disabled = false;
+  updateDownload.hidden = false;
   setButtonLabel(updateSkip, "Close");
   setButtonLabel(updateDownload, "Open GitHub");
   updateDownload.dataset.mode = "manual";
   updateModal.hidden = false;
   updateDownload.focus();
+}
+
+function showNoUpdateModal(update) {
+  availableUpdate = null;
+  updateTitle.textContent = "No update available";
+  updateMessage.textContent = "You already have the latest version installed.";
+  updateVersionLabel.textContent = "Installed";
+  updateVersion.textContent = update && update.currentVersion ? update.currentVersion : "Unknown";
+  updateDateLabel.textContent = "Latest";
+  updateDate.textContent = update && update.latestVersion ? update.latestVersion : updateVersion.textContent;
+  updateDownload.hidden = true;
+  updateDownload.disabled = true;
+  setButtonLabel(updateSkip, "Close");
+  updateModal.hidden = false;
+  updateSkip.focus();
 }
 
 async function checkForUpdates(options = {}) {
@@ -383,9 +400,9 @@ async function checkForUpdates(options = {}) {
     }
     if (!update.available) {
       if (showErrors) {
-        setStatus("No update available.");
+        showNoUpdateModal(update);
       }
-      return;
+      return update;
     }
     availableUpdate = update;
     showUpdateModal(update);
@@ -1311,10 +1328,7 @@ settingsCheckUpdates.addEventListener("click", async () => {
   settingsCheckUpdates.disabled = true;
   setButtonLabel(settingsCheckUpdates, "Checking...");
   try {
-    const update = await checkForUpdates({ showErrors: true });
-    if (update && !update.available && !update.error) {
-      setStatus("No update available.");
-    }
+    await checkForUpdates({ showErrors: true });
   } finally {
     settingsCheckUpdates.disabled = false;
     setButtonLabel(settingsCheckUpdates, "Check now");
