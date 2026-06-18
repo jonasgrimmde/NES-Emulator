@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld("nesApp", {
   getDefaultSettings: () => ipcRenderer.invoke("settings:defaults"),
   checkForUpdates: () => ipcRenderer.invoke("updates:check"),
   downloadAndInstallUpdate: () => ipcRenderer.invoke("updates:downloadAndInstall"),
+  onUpdateDownloadProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on("updates:downloadProgress", listener);
+    return () => ipcRenderer.removeListener("updates:downloadProgress", listener);
+  },
   openManualUpdateDownload: () => ipcRenderer.invoke("updates:openManualDownload"),
   readRom: (id) => ipcRenderer.invoke("rom:read", id),
   listSaves: (gameId) => ipcRenderer.invoke("saves:list", gameId),

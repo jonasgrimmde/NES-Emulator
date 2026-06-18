@@ -420,7 +420,67 @@ function verifyFile(filePath, expectedSha256, expectedSha512) {
   }
 }
 
-async function downloadAndInstallUpdate() {
+function sendUpdateDownloadProgress(event, progress) {
+  if (event && event.sender && !event.sender.isDestroyed()) {
+    event.sender.send("updates:downloadProgress", progress);
+  }
+}
+
+async function downloadToFileWithProgress(url, targetPath, event) {
+  const response = await fetch(url, {
+    headers: {
+      "Cache-Control": "no-cache",
+      "User-Agent": "nes-emulator-updater",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Update download failed: ${response.status} ${response.statusText}`);
+  }
+
+  const total = Number(response.headers.get("content-length")) || Number(latestUpdate.size) || 0;
+  let downloaded = 0;
+  let lastProgressAt = 0;
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+
+  if (!response.body) {
+    throw new Error("Update download failed: response body is empty.");
+  }
+  const file = fs.createWriteStream(targetPath);
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    downloaded += value.byteLength;
+    if (!file.write(Buffer.from(value))) {
+      await new Promise((resolve) => file.once("drain", resolve));
+    }
+    const now = Date.now();
+    if (now - lastProgressAt > 120 || downloaded === total) {
+      sendUpdateDownloadProgress(event, {
+        downloaded,
+        total,
+        percent: total > 0 ? Math.min(100, (downloaded / total) * 100) : null,
+      });
+      lastProgressAt = now;
+    }
+  }
+
+  await new Promise((resolve, reject) => {
+    file.on("finish", resolve);
+    file.on("error", reject);
+    file.end();
+  });
+
+  sendUpdateDownloadProgress(event, {
+    downloaded,
+    total: total || downloaded,
+    percent: 100,
+  });
+}
+
+async function downloadAndInstallUpdate(event) {
   if (!latestUpdate || compareVersions(latestUpdate.latestVersion, latestUpdate.currentVersion) <= 0) {
     await checkForUpdates();
   }
@@ -433,20 +493,17 @@ async function downloadAndInstallUpdate() {
 
   ensureAppDirs();
   const targetPath = path.join(getTempDir(), latestUpdate.path);
-  const response = await fetch(latestUpdate.url, {
-    headers: {
-      "Cache-Control": "no-cache",
-      "User-Agent": "nes-emulator-updater",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Update download failed: ${response.status} ${response.statusText}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  fs.writeFileSync(targetPath, buffer);
+  await downloadToFileWithProgress(latestUpdate.url, targetPath, event);
   verifyFile(targetPath, latestUpdate.sha256, latestUpdate.sha512);
 
-  const child = spawn(targetPath, ["/SILENT", "/NORESTART"], {
+  sendUpdateDownloadProgress(event, {
+    downloaded: latestUpdate.size || 0,
+    total: latestUpdate.size || 0,
+    percent: 100,
+    status: "starting-installer",
+  });
+
+  const child = spawn(targetPath, ["/SILENT", "/NORESTART", "/FORCECLOSEAPPLICATIONS"], {
     detached: true,
     stdio: "ignore",
   });
@@ -641,7 +698,7 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle("updates:check", () => checkForUpdates());
-  ipcMain.handle("updates:downloadAndInstall", () => downloadAndInstallUpdate());
+  ipcMain.handle("updates:downloadAndInstall", (event) => downloadAndInstallUpdate(event));
   ipcMain.handle("updates:openManualDownload", async () => {
     const url = getUpdaterConfig().releasesUrl;
     if (!url) {

@@ -135,6 +135,17 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function formatBytes(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let value = Number(bytes) || 0;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
 function keyLabelFromEvent(event) {
   if (event.code && event.code.startsWith("Numpad")) {
     return event.code.replace("Numpad", "Num-");
@@ -386,6 +397,23 @@ function showNoUpdateModal(update) {
   setButtonLabel(updateSkip, "Close");
   updateModal.hidden = false;
   updateSkip.focus();
+}
+
+function renderUpdateDownloadProgress(progress) {
+  if (!progress) {
+    return;
+  }
+  if (progress.status === "starting-installer") {
+    updateMessage.textContent = "Download complete. Starting installer...";
+    setButtonLabel(updateDownload, "Starting...");
+    return;
+  }
+  const downloaded = formatBytes(progress.downloaded);
+  const total = progress.total ? formatBytes(progress.total) : "unknown";
+  const percent = typeof progress.percent === "number" ? `${progress.percent.toFixed(1)}%` : "";
+  updateMessage.textContent = `Downloading update... ${percent} (${downloaded} / ${total})`;
+  setButtonLabel(updateDownload, percent ? percent : "Downloading...");
+  setStatus(`Downloading update ${percent}`.trim());
 }
 
 async function checkForUpdates(options = {}) {
@@ -1363,12 +1391,24 @@ updateDownload.addEventListener("click", async () => {
   }
   updateDownload.disabled = true;
   setButtonLabel(updateDownload, "Downloading...");
+  updateMessage.textContent = "Starting update download...";
   setStatus("Downloading update...");
+  const stopProgress = window.nesApp.onUpdateDownloadProgress(renderUpdateDownloadProgress);
   try {
-    await window.nesApp.downloadAndInstallUpdate();
+    const result = await window.nesApp.downloadAndInstallUpdate();
+    stopProgress();
+    if (result && result.started === false) {
+      showNoUpdateModal({
+        currentVersion: availableUpdate && availableUpdate.currentVersion,
+        latestVersion: availableUpdate && availableUpdate.latestVersion,
+      });
+      return;
+    }
+    updateMessage.textContent = "Download complete. Starting installer...";
     setStatus("Starting installer...");
     setButtonLabel(updateDownload, "Starting...");
   } catch (error) {
+    stopProgress();
     updateDownload.disabled = false;
     setButtonLabel(updateDownload, "Download now");
     setStatus(error.message || String(error));
