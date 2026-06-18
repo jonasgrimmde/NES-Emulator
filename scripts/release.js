@@ -108,6 +108,15 @@ function runCapture(command, args) {
   return result.status === 0 ? result.stdout.trim() : "";
 }
 
+function runStatus(command, args, options = {}) {
+  return spawnSync(command, args, {
+    cwd: rootDir,
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    env: Object.assign({}, process.env, options.env || {}),
+  });
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
@@ -294,6 +303,44 @@ async function uploadAsset(token, release, filePath, contentType) {
   return data;
 }
 
+function commitVersionFiles(version) {
+  logHeader("Git commit");
+  const insideGit = runStatus("git", ["rev-parse", "--is-inside-work-tree"]);
+  if (insideGit.status !== 0) {
+    logStep("Skip commit because this folder is not a Git repository.");
+    return;
+  }
+
+  const unstagedChanges = runStatus("git", ["diff", "--quiet", "--", "package.json", "package-lock.json"]);
+  const stagedChanges = runStatus("git", ["diff", "--cached", "--quiet", "--", "package.json", "package-lock.json"]);
+  const untrackedFiles = runCapture("git", ["ls-files", "--others", "--exclude-standard", "--", "package.json", "package-lock.json"]);
+  if (unstagedChanges.status === 0 && stagedChanges.status === 0 && !untrackedFiles) {
+    logStep("Skip commit because package.json and package-lock.json did not change.");
+    return;
+  }
+
+  const addResult = runStatus("git", ["add", "--", "package.json", "package-lock.json"]);
+  if (addResult.status !== 0) {
+    const details = (addResult.stderr || addResult.stdout || "").trim();
+    throw new Error(`Git add failed.${details ? ` ${details}` : ""}`);
+  }
+
+  logStep("Commit package.json and package-lock.json");
+  const result = runStatus("git", [
+    "commit",
+    "--only",
+    "package.json",
+    "package-lock.json",
+    "-m",
+    `chore: release ${version}`,
+  ]);
+  if (result.status !== 0) {
+    const details = (result.stderr || result.stdout || "").trim();
+    throw new Error(`Git commit failed.${details ? ` ${details}` : ""}`);
+  }
+  logSuccess(`Committed version files for ${version}`);
+}
+
 function uploadAssetWithProgress({ token, url, filePath, contentType, label, size }) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
@@ -420,6 +467,8 @@ async function main() {
 
   await uploadAsset(token, release, setupPath, "application/vnd.microsoft.portable-executable");
   await uploadAsset(token, release, manifest.manifestPath, "application/x-yaml");
+
+  commitVersionFiles(nextVersion);
 
   logHeader("Done");
   console.log("");
