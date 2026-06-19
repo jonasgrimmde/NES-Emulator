@@ -1769,6 +1769,30 @@ function stopEmulation() {
   }
 }
 
+async function stopLoadedGame() {
+  if (!browser) {
+    return;
+  }
+  await saveAutoNow("stop-game");
+  stopEmulation();
+  releaseAllInputs();
+  browser.destroy();
+  browser = null;
+  currentGame = null;
+  pausedByPage = false;
+  setRunControlsEnabled(false);
+  setButtonLabel(pauseButton, "Pause");
+  updateNesSplash();
+  renderSaveSlots();
+  if (getSelectedGame()) {
+    gameTitleEl.textContent = getSelectedGame().title;
+    setStatus(`${getSelectedGame().title} stopped.`);
+  } else {
+    gameTitleEl.textContent = "NES Emulator";
+    setStatus("Stopped.");
+  }
+}
+
 function pauseForPageLifecycle() {
   if (!browser || !running || pausedByPage) {
     return;
@@ -2200,10 +2224,7 @@ pauseButton.addEventListener("click", () => {
 });
 
 resetButton.addEventListener("click", () => {
-  if (browser) {
-    browser.nes.reset();
-    setStatus("Reset.");
-  }
+  stopLoadedGame();
 });
 
 openGamesButton.addEventListener("click", async () => {
