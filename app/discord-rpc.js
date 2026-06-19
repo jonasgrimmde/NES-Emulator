@@ -44,7 +44,9 @@ function createDiscordActivity(details, state, sessionStart) {
     },
     assets: {
       large_image: process.env.DISCORD_RPC_LARGE_IMAGE || "logo",
-      large_text: "NES Emulator",
+      large_text: process.env.DISCORD_RPC_LARGE_TEXT || "NES Emulator",
+      small_image: process.env.DISCORD_RPC_SMALL_IMAGE || "jonasgrimm",
+      small_text: process.env.DISCORD_RPC_SMALL_TEXT || "jonasgrimm.de",
     },
     instance: false,
   };
