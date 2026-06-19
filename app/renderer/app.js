@@ -42,6 +42,8 @@ const crtPreview = document.getElementById("crtPreview");
 const crtReset = document.getElementById("crtReset");
 const crtClose = document.getElementById("crtClose");
 const autosaveEnabled = document.getElementById("autosaveEnabled");
+const autosaveInterval = document.getElementById("autosaveInterval");
+const pauseWhenUnfocused = document.getElementById("pauseWhenUnfocused");
 const discordRpcEnabled = document.getElementById("discordRpcEnabled");
 const keybindGrid = document.getElementById("keybindGrid");
 const hotkeyGrid = document.getElementById("hotkeyGrid");
@@ -271,6 +273,10 @@ function getDiscordEnabled(source) {
   return !source || !source.discordRpc || source.discordRpc.enabled !== false;
 }
 
+function getPauseWhenUnfocused(source) {
+  return !source || !source.runtime || source.runtime.pauseWhenUnfocused !== false;
+}
+
 function normalizedSettingsForCompare(source) {
   if (!source) {
     return null;
@@ -279,6 +285,9 @@ function normalizedSettingsForCompare(source) {
   copy.crt = Object.assign({}, window.CRT_DEFAULTS || {}, copy.crt || {});
   copy.autosave = copy.autosave || {};
   copy.autosave.enabled = getAutosaveEnabled(copy);
+  copy.autosave.intervalSeconds = Number(copy.autosave.intervalSeconds) || 10;
+  copy.runtime = copy.runtime || {};
+  copy.runtime.pauseWhenUnfocused = getPauseWhenUnfocused(copy);
   copy.discordRpc = copy.discordRpc || {};
   copy.discordRpc.enabled = getDiscordEnabled(copy);
   return copy;
@@ -332,6 +341,18 @@ function refreshSettingsReverts() {
   attach(autosaveEnabled.closest(".settings-toggle"), !valuesEqual(getAutosaveEnabled(draftSettings), getAutosaveEnabled(settingsBaseline)), "Auto-Save", () => {
     draftSettings.autosave.enabled = getAutosaveEnabled(settingsBaseline);
     autosaveEnabled.checked = draftSettings.autosave.enabled;
+    refreshSettingsSaveState();
+    refreshSettingsReverts();
+  });
+  attach(autosaveInterval.closest(".settings-row"), !valuesEqual(Number(draftSettings.autosave.intervalSeconds), Number(settingsBaseline.autosave.intervalSeconds)), "Auto-Save interval", () => {
+    draftSettings.autosave.intervalSeconds = settingsBaseline.autosave.intervalSeconds;
+    autosaveInterval.value = String(draftSettings.autosave.intervalSeconds);
+    refreshSettingsSaveState();
+    refreshSettingsReverts();
+  });
+  attach(pauseWhenUnfocused.closest(".settings-toggle"), !valuesEqual(getPauseWhenUnfocused(draftSettings), getPauseWhenUnfocused(settingsBaseline)), "Pause when unfocused", () => {
+    draftSettings.runtime.pauseWhenUnfocused = getPauseWhenUnfocused(settingsBaseline);
+    pauseWhenUnfocused.checked = draftSettings.runtime.pauseWhenUnfocused;
     refreshSettingsSaveState();
     refreshSettingsReverts();
   });
@@ -611,12 +632,17 @@ function loadSettingsForm(source) {
   draftSettings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, draftSettings.crt || {});
   draftSettings.discordRpc = draftSettings.discordRpc || {};
   draftSettings.autosave = draftSettings.autosave || {};
+  draftSettings.runtime = draftSettings.runtime || {};
   draftSettings.discordRpc.enabled = getDiscordEnabled(draftSettings);
   draftSettings.autosave.enabled = getAutosaveEnabled(draftSettings);
+  draftSettings.autosave.intervalSeconds = Number(draftSettings.autosave.intervalSeconds) || 10;
+  draftSettings.runtime.pauseWhenUnfocused = getPauseWhenUnfocused(draftSettings);
   volumeRange.value = String(draftSettings.audio.volume);
   volumeValue.value = `${draftSettings.audio.volume}%`;
   resolutionSelect.value = draftSettings.video.resolution;
   autosaveEnabled.checked = draftSettings.autosave.enabled;
+  autosaveInterval.value = String(draftSettings.autosave.intervalSeconds);
+  pauseWhenUnfocused.checked = draftSettings.runtime.pauseWhenUnfocused;
   discordRpcEnabled.checked = draftSettings.discordRpc.enabled;
   crtToggle.checked = Boolean(draftSettings.crt.enabled);
   renderKeybindEditor();
@@ -630,6 +656,9 @@ function collectSettingsForm() {
   draftSettings.video.resolution = resolutionSelect.value;
   draftSettings.autosave = draftSettings.autosave || {};
   draftSettings.autosave.enabled = autosaveEnabled.checked;
+  draftSettings.autosave.intervalSeconds = Number(autosaveInterval.value);
+  draftSettings.runtime = draftSettings.runtime || {};
+  draftSettings.runtime.pauseWhenUnfocused = pauseWhenUnfocused.checked;
   draftSettings.discordRpc = draftSettings.discordRpc || {};
   draftSettings.discordRpc.enabled = discordRpcEnabled.checked;
   draftSettings.crt = clone(draftSettings.crt || settings.crt || window.CRT_DEFAULTS || {});
@@ -2560,6 +2589,23 @@ autosaveEnabled.addEventListener("change", () => {
   }
 });
 
+autosaveInterval.addEventListener("change", () => {
+  if (draftSettings) {
+    draftSettings.autosave.intervalSeconds = Number(autosaveInterval.value);
+    refreshSettingsSaveState();
+    refreshSettingsReverts();
+  }
+});
+
+pauseWhenUnfocused.addEventListener("change", () => {
+  if (draftSettings) {
+    draftSettings.runtime = draftSettings.runtime || {};
+    draftSettings.runtime.pauseWhenUnfocused = pauseWhenUnfocused.checked;
+    refreshSettingsSaveState();
+    refreshSettingsReverts();
+  }
+});
+
 discordRpcEnabled.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.discordRpc = draftSettings.discordRpc || {};
@@ -2701,10 +2747,22 @@ compatModal.addEventListener("click", (event) => {
 
 window.addEventListener("blur", () => {
   releaseAllInputs();
-  pauseForPageLifecycle();
+  if (getPauseWhenUnfocused(settings)) {
+    pauseForPageLifecycle();
+  }
 });
-window.addEventListener("focus", resumeFromPageLifecycle);
+window.addEventListener("focus", () => {
+  if (getPauseWhenUnfocused(settings)) {
+    resumeFromPageLifecycle();
+  }
+});
 document.addEventListener("visibilitychange", () => {
+  if (!getPauseWhenUnfocused(settings)) {
+    if (document.hidden) {
+      releaseAllInputs();
+    }
+    return;
+  }
   if (document.hidden) {
     pauseForPageLifecycle();
   } else {

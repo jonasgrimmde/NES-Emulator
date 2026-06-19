@@ -37,6 +37,9 @@ const defaultSettings = {
     enabled: true,
     intervalSeconds: 10,
   },
+  runtime: {
+    pauseWhenUnfocused: true,
+  },
   discordRpc: {
     enabled: true,
   },
@@ -395,6 +398,10 @@ function normalizeSettings(input = {}) {
   settings.autosave.intervalSeconds = Number.isFinite(intervalSeconds)
     ? Math.min(120, Math.max(3, Math.round(intervalSeconds)))
     : defaultSettings.autosave.intervalSeconds;
+  settings.runtime = isPlainObject(settings.runtime) ? settings.runtime : {};
+  settings.runtime.pauseWhenUnfocused = typeof settings.runtime.pauseWhenUnfocused === "boolean"
+    ? settings.runtime.pauseWhenUnfocused
+    : defaultSettings.runtime.pauseWhenUnfocused;
   settings.discordRpc = isPlainObject(settings.discordRpc) ? settings.discordRpc : {};
   settings.discordRpc.enabled = typeof settings.discordRpc.enabled === "boolean"
     ? settings.discordRpc.enabled
