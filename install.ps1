@@ -119,8 +119,8 @@ function Install-App {
   Invoke-WebRequest -UseBasicParsing -Uri $InstallerUrl -OutFile $tempInstaller
 
   Write-Step "$(if ($installed.Installed) { "Updating" } else { "Installing" }) $AppName $latestVersion..."
-  $args = @("/SILENT", "/NORESTART", "/FORCECLOSEAPPLICATIONS", "/SUPPRESSMSGBOXES")
-  $process = Start-Process -FilePath $tempInstaller -ArgumentList $args -Wait -PassThru
+  $installerArgs = @("/SILENT", "/NORESTART", "/FORCECLOSEAPPLICATIONS", "/SUPPRESSMSGBOXES")
+  $process = Start-Process -FilePath $tempInstaller -ArgumentList $installerArgs -Wait -PassThru
   Remove-Item -LiteralPath $tempInstaller -Force -ErrorAction SilentlyContinue
 
   if ($process.ExitCode -ne 0) {
@@ -185,15 +185,15 @@ function Uninstall-App {
   }
 
   Write-Step "Uninstalling $AppName..."
-  $args = @()
+   $uninstallArgs = @()
   if ($existingArgs) {
-    $args += $existingArgs
+    $uninstallArgs += $existingArgs
   }
-  $args += "/SILENT"
-  $args += "/NORESTART"
-  $args += "/SUPPRESSMSGBOXES"
+  $uninstallArgs += "/SILENT"
+  $uninstallArgs += "/NORESTART"
+  $uninstallArgs += "/SUPPRESSMSGBOXES"
 
-  $process = Start-Process -FilePath $uninstaller -ArgumentList $args -Wait -PassThru
+  $process = Start-Process -FilePath $uninstaller -ArgumentList $uninstallArgs -Wait -PassThru
   if ($process.ExitCode -ne 0) {
     Write-Fail "Uninstaller failed with exit code $($process.ExitCode)."
   }
