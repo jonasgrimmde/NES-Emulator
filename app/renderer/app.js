@@ -28,6 +28,7 @@ const volumeRange = document.getElementById("volumeRange");
 const volumeValue = document.getElementById("volumeValue");
 const resolutionSelect = document.getElementById("resolutionSelect");
 const autosaveEnabled = document.getElementById("autosaveEnabled");
+const discordRpcEnabled = document.getElementById("discordRpcEnabled");
 const keybindGrid = document.getElementById("keybindGrid");
 const hotkeyGrid = document.getElementById("hotkeyGrid");
 const settingsDefaults = document.getElementById("settingsDefaults");
@@ -127,6 +128,25 @@ function setButtonLabel(button, text) {
 }
 
 
+function discordRpcEnabledBySettings() {
+  return !settings || !settings.discordRpc || settings.discordRpc.enabled !== false;
+}
+
+function applyDiscordRpcSetting() {
+  if (!discordRpcEnabledBySettings()) {
+    if (window.nesApp && window.nesApp.clearDiscordActivity) {
+      window.nesApp.clearDiscordActivity().catch(() => {});
+    }
+    return;
+  }
+  if (currentGame && running) {
+    updateDiscordPlaying();
+  } else if (currentGame && browser) {
+    updateDiscordPaused();
+  } else {
+    updateDiscordIdle();
+  }
+}
 function updateDiscordIdle() {
   if (window.nesApp && window.nesApp.setDiscordIdle) {
     window.nesApp.setDiscordIdle().catch(() => {});
@@ -271,6 +291,7 @@ function applySettings() {
   applyVolume();
   applyKeybinds();
   startAutosaveTimer();
+  applyDiscordRpcSetting();
 }
 
 function renderKeybindEditor() {
@@ -327,6 +348,7 @@ function loadSettingsForm(source) {
   volumeValue.value = `${draftSettings.audio.volume}%`;
   resolutionSelect.value = draftSettings.video.resolution;
   autosaveEnabled.checked = Boolean(draftSettings.autosave && draftSettings.autosave.enabled);
+  discordRpcEnabled.checked = !draftSettings.discordRpc || draftSettings.discordRpc.enabled !== false;
   renderKeybindEditor();
   renderHotkeyEditor();
 }
@@ -336,6 +358,8 @@ function collectSettingsForm() {
   draftSettings.video.resolution = resolutionSelect.value;
   draftSettings.autosave = draftSettings.autosave || {};
   draftSettings.autosave.enabled = autosaveEnabled.checked;
+  draftSettings.discordRpc = draftSettings.discordRpc || {};
+  draftSettings.discordRpc.enabled = discordRpcEnabled.checked;
   return draftSettings;
 }
 
@@ -1698,6 +1722,13 @@ resolutionSelect.addEventListener("change", () => {
 autosaveEnabled.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.autosave.enabled = autosaveEnabled.checked;
+  }
+});
+
+discordRpcEnabled.addEventListener("change", () => {
+  if (draftSettings) {
+    draftSettings.discordRpc = draftSettings.discordRpc || {};
+    draftSettings.discordRpc.enabled = discordRpcEnabled.checked;
   }
 });
 

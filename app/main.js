@@ -20,6 +20,9 @@ const defaultSettings = {
     enabled: true,
     intervalSeconds: 10,
   },
+  discordRpc: {
+    enabled: true,
+  },
   keybinds: {
     p1: {
       A: { keyCode: 88, label: "X" },
@@ -295,6 +298,10 @@ function normalizeSettings(input = {}) {
   settings.autosave.intervalSeconds = Number.isFinite(intervalSeconds)
     ? Math.min(120, Math.max(3, Math.round(intervalSeconds)))
     : defaultSettings.autosave.intervalSeconds;
+  settings.discordRpc = isPlainObject(settings.discordRpc) ? settings.discordRpc : {};
+  settings.discordRpc.enabled = typeof settings.discordRpc.enabled === "boolean"
+    ? settings.discordRpc.enabled
+    : defaultSettings.discordRpc.enabled;
   sanitizeKeybinds(settings);
   settings.schemaVersion = defaultSettings.schemaVersion;
   return settings;
@@ -782,8 +789,11 @@ app.whenReady().then(() => {
   ensureAppDirs();
   loadLocalEnv();
   discordRpc = createDiscordRpc();
-  discordRpc.start();
-  discordRpc.setIdle();
+  const initialSettings = readSettings().settings;
+  if (initialSettings.discordRpc && initialSettings.discordRpc.enabled !== false) {
+    discordRpc.start();
+    discordRpc.setIdle();
+  }
 
   ipcMain.handle("games:listDirectory", (_event, relativeDir) => listGameDirectory(relativeDir));
   ipcMain.handle("games:list", () => listGames());
@@ -798,12 +808,14 @@ app.whenReady().then(() => {
   ipcMain.handle("discord:status", () => discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false });
   ipcMain.handle("discord:setIdle", () => {
     if (discordRpc) {
+      discordRpc.start();
       discordRpc.setIdle();
     }
     return discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false };
   });
   ipcMain.handle("discord:setGame", (_event, gameTitle, options) => {
     if (discordRpc) {
+      discordRpc.start();
       discordRpc.setGame(gameTitle, options || {});
     }
     return discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false };
