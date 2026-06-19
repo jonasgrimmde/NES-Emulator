@@ -68,16 +68,6 @@ body {
   font-family: var(--ui-font);
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 100% 4px;
-  opacity: 0.32;
-}
-
 button,
 select,
 input {
