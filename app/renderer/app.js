@@ -371,10 +371,28 @@ function applyCrtSettings() {
 
 function renderCrtPreview() {
   const ctx = crtPreview.getContext("2d");
-  ctx.fillStyle = "#101010"; ctx.fillRect(0, 0, crtPreview.width, crtPreview.height);
-  ctx.fillStyle = "#d9aa2b"; ctx.fillRect(22, 24, 90, 42);
-  ctx.fillStyle = "#2d67b8"; ctx.fillRect(130, 55, 84, 58);
-  ctx.fillStyle = "#b44242"; ctx.font = "20px monospace"; ctx.fillText("NES CRT", 55, 135);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#050505";
+  ctx.fillRect(0, 0, crtPreview.width, crtPreview.height);
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(8, 8, 240, 224);
+  ctx.fillStyle = "#2b6fd6";
+  ctx.fillRect(18, 24, 64, 56);
+  ctx.fillStyle = "#d6ad2b";
+  ctx.fillRect(92, 24, 64, 56);
+  ctx.fillStyle = "#b63f3f";
+  ctx.fillRect(166, 24, 64, 56);
+  ctx.fillStyle = "#101010";
+  ctx.fillRect(18, 94, 212, 58);
+  ctx.fillStyle = "#54c46f";
+  for (let x = 24; x < 224; x += 16) {
+    ctx.fillRect(x, 112 + Math.round(Math.sin(x / 16) * 14), 10, 28);
+  }
+  ctx.fillStyle = "#ece4c8";
+  ctx.font = "bold 24px monospace";
+  ctx.fillText("CRT TEST", 52, 190);
+  ctx.font = "12px monospace";
+  ctx.fillText("PIXEL GRID 240P", 70, 210);
   if (!crtPreviewFilter && window.CRTFilter) {
     const wrap = crtPreview.parentElement;
     crtPreviewFilter = new window.CRTFilter(wrap);

@@ -231,16 +231,20 @@
     </div>
 
     <div id="crtModal" class="modal-backdrop" hidden>
-      <section class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="crtTitle">
-        <div class="modal-icon"><i class="fa-solid fa-tv" aria-hidden="true"></i></div>
-        <div class="modal-copy"><h2 id="crtTitle">CRT Shader</h2></div>
-        <div class="crt-preview"><canvas id="crtPreview" width="256" height="160"></canvas></div>
-        <div id="crtControls" class="settings-body"></div>
-        <div class="modal-actions">
-          <button id="crtReset" class="btn" type="button"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i><span>Reset</span></button>
-          <button id="crtClose" class="btn btn-warning" type="button"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Done</span></button>
-        </div>
-      </section>
+      <div class="crt-customizer">
+        <aside class="crt-preview-panel" aria-hidden="true">
+          <div class="crt-preview"><canvas id="crtPreview" width="256" height="240"></canvas></div>
+        </aside>
+        <section class="modal-card settings-card crt-card" role="dialog" aria-modal="true" aria-labelledby="crtTitle">
+          <div class="modal-icon"><i class="fa-solid fa-tv" aria-hidden="true"></i></div>
+          <div class="modal-copy"><h2 id="crtTitle">CRT Shader</h2></div>
+          <div id="crtControls" class="settings-body crt-controls"></div>
+          <div class="modal-actions">
+            <button id="crtReset" class="btn" type="button"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i><span>Reset</span></button>
+            <button id="crtClose" class="btn btn-warning" type="button"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Done</span></button>
+          </div>
+        </section>
+      </div>
     </div>
 
     <div id="keyCaptureModal" class="modal-backdrop" hidden>

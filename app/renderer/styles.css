@@ -557,7 +557,7 @@ h1 {
 .crt-preview {
   position: relative;
   width: 100%;
-  aspect-ratio: 256 / 160;
+  aspect-ratio: 256 / 240;
   background: #000;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -998,6 +998,42 @@ kbd {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+.crt-card {
+  width: min(620px, 100%);
+}
+
+.crt-customizer {
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-columns: minmax(340px, 440px) minmax(520px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.crt-preview-panel {
+  min-width: 0;
+  align-self: start;
+  padding: 18px;
+  background: #101010;
+  border: 1px solid #4b3a1b;
+  border-radius: 8px;
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px #050505;
+}
+
+.crt-preview-panel .crt-preview {
+  box-shadow: 0 0 0 2px #050505, 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.crt-controls {
+  max-height: min(560px, calc(100vh - 190px));
+  padding-right: 8px;
+}
+
+.settings-body.crt-controls {
+  grid-column: 1 / -1;
+}
+
 .settings-path {
   min-width: 0;
   overflow: hidden;
@@ -1186,6 +1222,15 @@ kbd {
 
   #nes {
     width: min(100%, 640px);
+  }
+
+  .crt-customizer {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .crt-controls {
+    max-height: none;
   }
 }
 
