@@ -123,6 +123,8 @@ function Show-Menu {
   $installLabel = "Install"
   if ($installed.Installed -and $latestVersion -ne "unknown" -and $installed.Version -ne $latestVersion) {
     $installLabel = "Update"
+  } elseif ($installed.Installed -and $latestVersion -ne "unknown" -and $installed.Version -eq $latestVersion) {
+    $installLabel = "Reinstall"
   }
 
   Write-Host "1 - $installLabel"

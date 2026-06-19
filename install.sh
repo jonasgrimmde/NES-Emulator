@@ -202,6 +202,8 @@ show_menu() {
   install_label="Install"
   if is_installed && [ "$latest_version" != "unknown" ] && [ "$installed_version" != "$latest_version" ]; then
     install_label="Update"
+  elif is_installed && [ "$latest_version" != "unknown" ] && [ "$installed_version" = "$latest_version" ]; then
+    install_label="Reinstall"
   fi
 
   printf '1 - %s\n' "$install_label"
