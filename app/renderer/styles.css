@@ -564,30 +564,18 @@ aside {
   width: min(100%, 1024px);
 }
 
-.action-row,
-.quick-row,
-.system-row {
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quick-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.action-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.controller-panel {
-  display: grid;
-  gap: 10px;
-}
-
-.controller-player {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.control-group,
 .save-panel,
 .keys-panel,
 .settings-section {
@@ -597,35 +585,6 @@ aside {
   background: #0f1217;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-}
-
-.dpad {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.dpad .up {
-  grid-column: 2;
-}
-
-.dpad .left {
-  grid-column: 1;
-}
-
-.dpad .down {
-  grid-column: 2;
-}
-
-.dpad .right {
-  grid-column: 3;
-}
-
-.ab-pad {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  align-content: end;
 }
 
 .btn {
@@ -762,10 +721,8 @@ input:focus-visible {
   color: #ff9ca2;
 }
 
-.controller-panel .btn,
 .action-row .btn,
-.quick-row .btn,
-.system-row .btn {
+.quick-row .btn {
   min-height: 36px;
 }
 
@@ -1378,15 +1335,13 @@ input[type="range"] {
   }
 
   .game-toolbar,
-  .controller-player,
   .action-row,
   .keybind-grid,
   .settings-row {
     grid-template-columns: 1fr;
   }
 
-  .quick-row,
-  .system-row {
+  .quick-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
