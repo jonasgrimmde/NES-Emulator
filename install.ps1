@@ -185,7 +185,7 @@ function Uninstall-App {
   }
 
   Write-Step "Uninstalling $AppName..."
-   $uninstallArgs = @()
+  $uninstallArgs = @()
   if ($existingArgs) {
     $uninstallArgs += $existingArgs
   }
