@@ -1136,9 +1136,44 @@ kbd {
 }
 
 .settings-toggle input {
+  appearance: none;
+  width: 48px;
+  height: 26px;
+  position: relative;
+  margin: 0;
+  background: #3a1212;
+  border: 1px solid #783232;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px #070707;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.settings-toggle input::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 18px;
   height: 18px;
-  accent-color: var(--gold);
+  background: #f3efe2;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+  transition: transform 120ms ease;
+}
+
+.settings-toggle input:checked {
+  background: #2f6d21;
+  border-color: #76b82a;
+}
+
+.settings-toggle input:checked::before {
+  transform: translateX(22px);
+}
+
+.settings-toggle input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .settings-command {
@@ -1197,6 +1232,10 @@ kbd {
   border: 1px solid #4b3a1b;
   border-radius: 5px;
   cursor: pointer;
+}
+
+.setting-revert[hidden] {
+  display: none;
 }
 
 .setting-revert:hover,

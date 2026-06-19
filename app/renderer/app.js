@@ -263,6 +263,14 @@ function getBaselineCrtSettings() {
   return Object.assign({}, window.CRT_DEFAULTS || {}, settingsBaseline && settingsBaseline.crt || {});
 }
 
+function getAutosaveEnabled(source) {
+  return Boolean(source && source.autosave && source.autosave.enabled);
+}
+
+function getDiscordEnabled(source) {
+  return !source || !source.discordRpc || source.discordRpc.enabled !== false;
+}
+
 function refreshSettingsReverts() {
   if (!draftSettings || !settingsBaseline) {
     return;
@@ -293,13 +301,13 @@ function refreshSettingsReverts() {
     applyCrtSettings();
     refreshSettingsReverts();
   });
-  attach(autosaveEnabled.closest(".settings-toggle"), !valuesEqual(Boolean(draftSettings.autosave.enabled), Boolean(settingsBaseline.autosave.enabled)), "Auto-Save", () => {
-    draftSettings.autosave.enabled = Boolean(settingsBaseline.autosave.enabled);
+  attach(autosaveEnabled.closest(".settings-toggle"), !valuesEqual(getAutosaveEnabled(draftSettings), getAutosaveEnabled(settingsBaseline)), "Auto-Save", () => {
+    draftSettings.autosave.enabled = getAutosaveEnabled(settingsBaseline);
     autosaveEnabled.checked = draftSettings.autosave.enabled;
     refreshSettingsReverts();
   });
-  attach(discordRpcEnabled.closest(".settings-toggle"), !valuesEqual(Boolean(draftSettings.discordRpc.enabled), Boolean(settingsBaseline.discordRpc.enabled)), "Rich Presence", () => {
-    draftSettings.discordRpc.enabled = Boolean(settingsBaseline.discordRpc.enabled);
+  attach(discordRpcEnabled.closest(".settings-toggle"), !valuesEqual(getDiscordEnabled(draftSettings), getDiscordEnabled(settingsBaseline)), "Rich Presence", () => {
+    draftSettings.discordRpc.enabled = getDiscordEnabled(settingsBaseline);
     discordRpcEnabled.checked = draftSettings.discordRpc.enabled;
     refreshSettingsReverts();
   });
@@ -575,11 +583,13 @@ function loadSettingsForm(source) {
   draftSettings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, draftSettings.crt || {});
   draftSettings.discordRpc = draftSettings.discordRpc || {};
   draftSettings.autosave = draftSettings.autosave || {};
+  draftSettings.discordRpc.enabled = getDiscordEnabled(draftSettings);
+  draftSettings.autosave.enabled = getAutosaveEnabled(draftSettings);
   volumeRange.value = String(draftSettings.audio.volume);
   volumeValue.value = `${draftSettings.audio.volume}%`;
   resolutionSelect.value = draftSettings.video.resolution;
-  autosaveEnabled.checked = Boolean(draftSettings.autosave && draftSettings.autosave.enabled);
-  discordRpcEnabled.checked = !draftSettings.discordRpc || draftSettings.discordRpc.enabled !== false;
+  autosaveEnabled.checked = draftSettings.autosave.enabled;
+  discordRpcEnabled.checked = draftSettings.discordRpc.enabled;
   renderKeybindEditor();
   renderHotkeyEditor();
   refreshSettingsReverts();
@@ -652,13 +662,21 @@ function closeSettingsModal() {
   settingsBaseline = null;
 }
 
-function openSettingsModal() {
+async function openSettingsModal() {
   if (!settings) {
     return;
   }
   settingsPathEl.textContent = settingsPath;
   settingsPathEl.title = settingsPath;
-  settingsBaseline = clone(settings);
+  try {
+    settingsBaseline = clone(await window.nesApp.getDefaultSettings());
+    settingsBaseline.crt = Object.assign({}, window.CRT_DEFAULTS || {}, settingsBaseline.crt || {});
+  } catch (error) {
+    settingsBaseline = Object.assign(clone(settings), {
+      crt: Object.assign({}, window.CRT_DEFAULTS || {}, settings.crt || {}),
+    });
+    setStatus(error.message || String(error));
+  }
   loadSettingsForm(settings);
   settingsModal.hidden = false;
   volumeRange.focus();
@@ -2514,7 +2532,10 @@ discordRpcEnabled.addEventListener("change", () => {
 
 settingsDefaults.addEventListener("click", async () => {
   try {
-    loadSettingsForm(await window.nesApp.getDefaultSettings());
+    const defaults = await window.nesApp.getDefaultSettings();
+    defaults.crt = Object.assign({}, window.CRT_DEFAULTS || {}, defaults.crt || {});
+    settingsBaseline = clone(defaults);
+    loadSettingsForm(defaults);
     setStatus("Default settings loaded in the modal.");
   } catch (error) {
     setStatus(error.message || String(error));
