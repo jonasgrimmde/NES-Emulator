@@ -2595,7 +2595,6 @@ settingsSave.addEventListener("click", async () => {
     draftSettings = clone(settings);
     refreshSettingsSaveState();
     applySettings();
-    closeSettingsModal();
     setStatus("Settings saved.");
   } catch (error) {
     setStatus(error.message || String(error));
