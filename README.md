@@ -100,4 +100,4 @@ The app checks:
 https://github.com/jonasgrimmde/NES-Emulator/releases/latest/download/latest.yml
 ```
 
-Windows updates download and start the verified installer. Linux updates open the latest GitHub Release; users can rerun the Linux install command to update.
+Windows updates download and start the verified installer. Linux updates show the install command so users can copy and run it in a terminal.

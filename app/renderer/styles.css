@@ -1038,6 +1038,15 @@ kbd {
   margin: 0;
 }
 
+.modal-meta dd.command-value {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  line-height: 1.35;
+}
+
 .modal-actions {
   grid-column: 1 / -1;
   display: flex;

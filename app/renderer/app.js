@@ -792,18 +792,23 @@ function showUpdateModal(update) {
   availableUpdate = update;
   updateTitle.textContent = "Update available";
   const manualInstall = update && update.installMode === "manual";
-  updateMessage.textContent = manualInstall
+  const manualCommand = update && update.manualCommand;
+  updateMessage.textContent = manualCommand
+    ? "A new version is available. Copy and run this command in your terminal to update."
+    : manualInstall
     ? "A new version is available. Open the latest GitHub release to download it for this platform."
     : "A new installer will be downloaded and started.";
   updateVersionLabel.textContent = "Version";
   updateVersion.textContent = `${update.currentVersion} -> ${update.latestVersion}`;
-  updateDateLabel.textContent = "Date";
-  updateDate.textContent = update.releaseDate ? formatSavedAt(update.releaseDate) : "Unknown";
+  updateDateLabel.textContent = manualCommand ? "Command" : "Date";
+  updateDate.textContent = manualCommand || (update.releaseDate ? formatSavedAt(update.releaseDate) : "Unknown");
+  updateDate.title = manualCommand || "";
+  updateDate.classList.toggle("command-value", Boolean(manualCommand));
   updateDownload.disabled = false;
   updateDownload.hidden = false;
   setButtonLabel(updateSkip, "Skip");
-  setButtonLabel(updateDownload, manualInstall ? "Open GitHub" : "Download now");
-  updateDownload.dataset.mode = manualInstall ? "manual" : "download";
+  setButtonLabel(updateDownload, manualCommand ? "Copy command" : manualInstall ? "Open GitHub" : "Download now");
+  updateDownload.dataset.mode = manualCommand ? "copy-command" : manualInstall ? "manual" : "download";
   updateModal.hidden = false;
   updateDownload.focus();
 }
@@ -816,6 +821,8 @@ function showUpdateErrorModal(update) {
   updateVersion.textContent = update && update.currentVersion ? update.currentVersion : "Unknown";
   updateDateLabel.textContent = "Problem";
   updateDate.textContent = update && update.error ? update.error : "Not available";
+  updateDate.title = "";
+  updateDate.classList.remove("command-value");
   updateDownload.disabled = false;
   updateDownload.hidden = false;
   setButtonLabel(updateSkip, "Close");
@@ -833,6 +840,8 @@ function showNoUpdateModal(update) {
   updateVersion.textContent = update && update.currentVersion ? update.currentVersion : "Unknown";
   updateDateLabel.textContent = "Latest";
   updateDate.textContent = update && update.latestVersion ? update.latestVersion : updateVersion.textContent;
+  updateDate.title = "";
+  updateDate.classList.remove("command-value");
   updateDownload.hidden = true;
   updateDownload.disabled = true;
   setButtonLabel(updateSkip, "Close");
@@ -2708,6 +2717,17 @@ keyCaptureModal.addEventListener("click", (event) => {
 updateSkip.addEventListener("click", closeUpdateModal);
 
 updateDownload.addEventListener("click", async () => {
+  if (updateDownload.dataset.mode === "copy-command") {
+    const command = availableUpdate && availableUpdate.manualCommand;
+    if (!command) {
+      setStatus("Update command is not available.");
+      return;
+    }
+    window.nesApp.copyText(command);
+    setButtonLabel(updateDownload, "Copied");
+    setStatus("Update command copied.");
+    return;
+  }
   if (updateDownload.dataset.mode === "manual") {
     try {
       await window.nesApp.openManualUpdateDownload();

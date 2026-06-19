@@ -488,6 +488,7 @@ function getUpdaterConfig() {
   const repo = process.env.GITHUB_REPO || release.repo;
   return {
     latestUrl: process.env.NES_EMULATOR_LATEST_URL || release.latestUrl,
+    linuxInstallCommand: owner && repo ? `curl -fsSL https://raw.githubusercontent.com/${owner}/${repo}/refs/heads/main/install.sh | sh` : null,
     releasesUrl: owner && repo ? `https://github.com/${owner}/${repo}/releases` : null,
   };
 }
@@ -562,6 +563,7 @@ async function checkForUpdates() {
       sha512: asset.sha512,
       size: asset.size,
       installMode: asset.installMode,
+      manualCommand: process.platform === "linux" ? config.linuxInstallCommand : null,
       manualUrl: config.releasesUrl,
     };
 
