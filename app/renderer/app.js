@@ -2335,7 +2335,8 @@ crtClose.addEventListener("click", () => {
 });
 
 crtReset.addEventListener("click", () => {
-  settings.crt = Object.assign({}, window.CRT_DEFAULTS || {});
+  const wasEnabled = Boolean(getCrtSettings().enabled);
+  settings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, { enabled: wasEnabled });
   if (draftSettings) {
     draftSettings.crt = settings.crt;
   }
