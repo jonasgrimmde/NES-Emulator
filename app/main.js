@@ -275,7 +275,11 @@ function getPackageConfig() {
 }
 
 function getWindowTitle() {
-  return `NES Emulator (${app.getVersion()})`;
+  return `NES Emulator (${getDisplayVersion()})`;
+}
+
+function getDisplayVersion() {
+  return app.isPackaged ? app.getVersion() : `${app.getVersion()} dev`;
 }
 
 function getWindowIconPath() {
@@ -1060,7 +1064,7 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:write", (_event, settings) => writeSettings(settings));
   ipcMain.handle("settings:reset", () => resetSettings());
   ipcMain.handle("settings:defaults", () => getDefaultSettings());
-  ipcMain.handle("app:version", () => app.getVersion());
+  ipcMain.handle("app:version", () => getDisplayVersion());
   ipcMain.handle("discord:status", () => discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false });
   ipcMain.handle("discord:setIdle", () => {
     if (discordRpc) {
