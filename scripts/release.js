@@ -157,6 +157,7 @@ function parseArgs() {
     bump: "minor",
     draft: false,
     prerelease: false,
+    linuxOnly: false,
   };
   for (const arg of args) {
     if (arg === "--no-bump") options.bump = "none";
@@ -165,6 +166,7 @@ function parseArgs() {
     if (arg === "--major") options.bump = "major";
     if (arg === "--draft") options.draft = true;
     if (arg === "--prerelease") options.prerelease = true;
+    if (arg === "--linux-only") options.linuxOnly = true;
     if (arg.startsWith("--version="))
       options.version = arg.slice("--version=".length);
   }
@@ -228,23 +230,72 @@ function yamlQuote(value) {
   return JSON.stringify(String(value));
 }
 
-function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
-  const setupName = path.basename(setupPath);
+function parseManifestText(text) {
+  const manifest = {};
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const match = /^([a-zA-Z0-9_-]+):\s*(.*)$/.exec(line.trim());
+    if (!match) {
+      continue;
+    }
+    const key = match[1];
+    let value = match[2].trim();
+    if (value.startsWith("\"") && value.endsWith("\"")) {
+      value = JSON.parse(value);
+    } else if (/^\d+$/.test(value)) {
+      value = Number(value);
+    }
+    manifest[key] = value;
+  }
+  return manifest;
+}
+
+function serializeManifest(manifest) {
+  const lines = [];
+  for (const [key, value] of Object.entries(manifest)) {
+    lines.push(typeof value === "number" ? `${key}: ${value}` : `${key}: ${yamlQuote(value)}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function createReleaseAssetInfo(filePath, tag, owner, repo) {
+  const name = path.basename(filePath);
+  const downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`;
+  return {
+    name,
+    url: downloadUrl,
+    size: fs.statSync(filePath).size,
+    sha256: fileHash(filePath, "sha256"),
+    sha512: fileHashBase64(filePath, "sha512"),
+  };
+}
+
+function createLatestManifest({ pkg, setupPath, appImagePath, version, owner, repo }) {
   const tag = `v${version}`;
   const releaseDate = new Date().toISOString();
-  const downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(setupName)}`;
-  const size = fs.statSync(setupPath).size;
-  const sha256 = fileHash(setupPath, "sha256");
-  const sha512 = fileHashBase64(setupPath, "sha512");
+  const windows = createReleaseAssetInfo(setupPath, tag, owner, repo);
+  const linux = appImagePath ? createReleaseAssetInfo(appImagePath, tag, owner, repo) : null;
   const manifest = [
     `version: ${yamlQuote(version)}`,
     `releaseDate: ${yamlQuote(releaseDate)}`,
     `repo: ${yamlQuote(`${owner}/${repo}`)}`,
-    `path: ${yamlQuote(setupName)}`,
-    `url: ${yamlQuote(downloadUrl)}`,
-    `sha256: ${yamlQuote(sha256)}`,
-    `sha512: ${yamlQuote(sha512)}`,
-    `size: ${size}`,
+    `path: ${yamlQuote(windows.name)}`,
+    `url: ${yamlQuote(windows.url)}`,
+    `sha256: ${yamlQuote(windows.sha256)}`,
+    `sha512: ${yamlQuote(windows.sha512)}`,
+    `size: ${windows.size}`,
+    `windowsPath: ${yamlQuote(windows.name)}`,
+    `windowsUrl: ${yamlQuote(windows.url)}`,
+    `windowsSha256: ${yamlQuote(windows.sha256)}`,
+    `windowsSha512: ${yamlQuote(windows.sha512)}`,
+    `windowsSize: ${windows.size}`,
+    ...(linux ? [
+      `linuxPath: ${yamlQuote(linux.name)}`,
+      `linuxUrl: ${yamlQuote(linux.url)}`,
+      `linuxSha256: ${yamlQuote(linux.sha256)}`,
+      `linuxSha512: ${yamlQuote(linux.sha512)}`,
+      `linuxSize: ${linux.size}`,
+    ] : []),
     `productName: ${yamlQuote(pkg.build && pkg.build.productName ? pkg.build.productName : "NES Emulator")}`,
     "",
   ].join("\n");
@@ -252,12 +303,14 @@ function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
   fs.writeFileSync(manifestPath, manifest, "utf8");
   return {
     manifestPath,
-    setupName,
+    setupName: windows.name,
+    appImageName: linux && linux.name,
     tag,
-    downloadUrl,
-    sha256,
-    sha512,
-    size,
+    downloadUrl: windows.url,
+    sha256: windows.sha256,
+    sha512: windows.sha512,
+    size: windows.size,
+    linuxSha256: linux && linux.sha256,
     releaseDate,
   };
 }
@@ -276,6 +329,40 @@ function createInstallerUploadCopy(setupPath) {
   logSuccess(`Created upload installer ${path.relative(rootDir, uploadPath)}`);
   logInfo(
     "Installer",
+    `${path.relative(rootDir, uploadPath)} (${formatBytes(fs.statSync(uploadPath).size)})`,
+  );
+
+  return uploadPath;
+}
+
+function findAppImage() {
+  const distDir = path.join(rootDir, "dist");
+  const entries = fs.readdirSync(distDir, { withFileTypes: true });
+  const appImage = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".AppImage"))
+    .map((entry) => path.join(distDir, entry.name))
+    .sort((left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs)[0];
+  if (!appImage) {
+    throw new Error("Linux AppImage was not found in dist.");
+  }
+  return appImage;
+}
+
+function createAppImageUploadCopy(appImagePath) {
+  const uploadPath = path.join(
+    rootDir,
+    "dist",
+    "installer",
+    "NES-Emulator-Linux.AppImage",
+  );
+
+  fs.mkdirSync(path.dirname(uploadPath), { recursive: true });
+  fs.rmSync(uploadPath, { force: true });
+  fs.copyFileSync(appImagePath, uploadPath);
+
+  logSuccess(`Created upload AppImage ${path.relative(rootDir, uploadPath)}`);
+  logInfo(
+    "AppImage",
     `${path.relative(rootDir, uploadPath)} (${formatBytes(fs.statSync(uploadPath).size)})`,
   );
 
@@ -409,6 +496,64 @@ async function verifyReleaseAssetSet(token, owner, repo, tag, expectedAssetNames
     );
   }
   logSuccess(`Release assets verified: ${expected.join(", ")}`);
+}
+
+async function getReleaseByTag(token, owner, repo, tag) {
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
+  return githubRequest(
+    token,
+    `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
+  );
+}
+
+async function fetchReleaseAssetText(token, release, assetName) {
+  const asset = (release.assets || []).find((entry) => entry.name === assetName);
+  if (!asset || !asset.browser_download_url) {
+    return "";
+  }
+  const headers = {
+    Accept: "application/octet-stream",
+    "User-Agent": "nes-emulator-release-script",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(asset.browser_download_url, { headers });
+  if (!response.ok) {
+    throw new Error(`Download ${assetName} failed: ${response.status} ${response.statusText}`);
+  }
+  return response.text();
+}
+
+function writeLinuxManifestUpdate({ existingText, appImagePath, version, owner, repo }) {
+  const tag = `v${version}`;
+  const linux = createReleaseAssetInfo(appImagePath, tag, owner, repo);
+  const manifest = Object.assign(
+    {
+      version,
+      releaseDate: new Date().toISOString(),
+      repo: `${owner}/${repo}`,
+      productName: "NES Emulator",
+    },
+    parseManifestText(existingText),
+    {
+      version,
+      repo: `${owner}/${repo}`,
+      linuxPath: linux.name,
+      linuxUrl: linux.url,
+      linuxSha256: linux.sha256,
+      linuxSha512: linux.sha512,
+      linuxSize: linux.size,
+    },
+  );
+  const manifestPath = path.join(rootDir, "dist", "installer", "latest.yml");
+  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  fs.writeFileSync(manifestPath, serializeManifest(manifest), "utf8");
+  return {
+    manifestPath,
+    appImageName: linux.name,
+    linuxSha256: linux.sha256,
+  };
 }
 
 async function uploadAsset(token, release, filePath, contentType) {
@@ -595,6 +740,54 @@ function uploadAssetWithProgress({
   });
 }
 
+async function releaseLinuxAppImage({ token, owner, repo, version }) {
+  if (process.platform !== "linux") {
+    throw new Error("AppImage packaging must run on Linux. Use this mode in Linux, WSL with Linux tooling, or a Linux CI runner.");
+  }
+
+  const tag = `v${version}`;
+  logHeader("Linux AppImage release");
+  logInfo("Repository", `${owner}/${repo}`);
+  logInfo("Version", version);
+
+  logHeader("Build");
+  run("npm", ["run", "pack:linux"]);
+  const appImageUploadPath = createAppImageUploadCopy(findAppImage());
+
+  logHeader("GitHub");
+  logStep(`Load release ${tag}`);
+  const release = await getReleaseByTag(token, owner, repo, tag);
+  logSuccess(`Release ready: ${release.html_url || tag}`);
+
+  const existingManifest = await fetchReleaseAssetText(token, release, "latest.yml");
+  const manifest = writeLinuxManifestUpdate({
+    existingText: existingManifest,
+    appImagePath: appImageUploadPath,
+    version,
+    owner,
+    repo,
+  });
+  logSuccess(`Updated ${path.relative(rootDir, manifest.manifestPath)} with Linux asset info`);
+
+  await uploadAsset(
+    token,
+    release,
+    appImageUploadPath,
+    "application/octet-stream",
+  );
+  await uploadAsset(
+    token,
+    release,
+    manifest.manifestPath,
+    "application/x-yaml",
+  );
+
+  logHeader("Done");
+  logSuccess(`Uploaded Linux AppImage for NES Emulator ${version}`);
+  logInfo("AppImage", manifest.appImageName);
+  logInfo("Linux SHA256", manifest.linuxSha256);
+}
+
 async function main() {
   const releaseStartedAt = Date.now();
   const originalPackageJson = readTextIfExists(packagePath);
@@ -617,14 +810,19 @@ async function main() {
     if (!owner || !repo) {
       throw new Error("Missing release.owner/release.repo in package.json.");
     }
+    if (options.linuxOnly && process.platform !== "linux") {
+      throw new Error("AppImage packaging must run on Linux. Use a Linux machine, WSL with Linux tooling, or a Linux CI runner for npm run release:linux.");
+    }
 
     const nextVersion =
-      options.version || bumpVersion(pkgBefore.version, options.bump);
+      options.linuxOnly
+        ? (options.version || pkgBefore.version)
+        : (options.version || bumpVersion(pkgBefore.version, options.bump));
     logInfo("Repository", `${owner}/${repo}`);
-    logInfo("Version", `${pkgBefore.version} -> ${nextVersion}`);
+    logInfo("Version", options.linuxOnly ? nextVersion : `${pkgBefore.version} -> ${nextVersion}`);
     logInfo(
       "Mode",
-      `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`,
+      `${options.linuxOnly ? "linux appimage" : (options.draft ? "draft" : "published")}${options.prerelease ? ", prerelease" : ""}`,
     );
 
     logHeader("Preflight");
@@ -637,7 +835,14 @@ async function main() {
       );
     }
     logSuccess("GitHub auth available");
-    precheckVersionCommit();
+    if (!options.linuxOnly) {
+      precheckVersionCommit();
+    }
+
+    if (options.linuxOnly) {
+      await releaseLinuxAppImage({ token, owner, repo, version: nextVersion });
+      return;
+    }
 
     logHeader("Prepare files");
     logStep("Update package version");
@@ -647,7 +852,7 @@ async function main() {
 
     logHeader("Build");
     run("npm", ["run", "clean"]);
-    run("npm", ["run", "pack"]);
+    run("npm", ["run", "pack:win"]);
     run("npm", ["run", "setup"]);
 
     const setupPath = path.join(
@@ -699,7 +904,10 @@ async function main() {
       path.basename(setupUploadPath),
       path.basename(manifest.manifestPath),
     ];
-    await deleteUnexpectedReleaseAssets(token, release, uploadAssetNames);
+    await deleteUnexpectedReleaseAssets(token, release, [
+      ...uploadAssetNames,
+      "NES-Emulator-Linux.AppImage",
+    ]);
 
     await uploadAsset(
       token,

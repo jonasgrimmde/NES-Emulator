@@ -283,7 +283,7 @@ function getDisplayVersion() {
 }
 
 function getWindowIconPath() {
-  return path.join(__dirname, "..", "build", "icons", "app.ico");
+  return path.join(__dirname, "..", "build", "icons", process.platform === "win32" ? "app.ico" : "app.png");
 }
 
 function resolveInside(baseDir, relativeDir = "") {
@@ -492,6 +492,27 @@ function getUpdaterConfig() {
   };
 }
 
+function getManifestAssetForPlatform(manifest) {
+  if (process.platform === "linux") {
+    return {
+      path: manifest.linuxPath || manifest.linux_path,
+      url: manifest.linuxUrl || manifest.linux_url,
+      sha256: manifest.linuxSha256 || manifest.linux_sha256,
+      sha512: manifest.linuxSha512 || manifest.linux_sha512,
+      size: manifest.linuxSize || manifest.linux_size || null,
+      installMode: "manual",
+    };
+  }
+  return {
+    path: manifest.windowsPath || manifest.windows_path || manifest.path,
+    url: manifest.windowsUrl || manifest.windows_url || manifest.url,
+    sha256: manifest.windowsSha256 || manifest.windows_sha256 || manifest.sha256,
+    sha512: manifest.windowsSha512 || manifest.windows_sha512 || manifest.sha512,
+    size: manifest.windowsSize || manifest.windows_size || manifest.size || null,
+    installMode: process.platform === "win32" ? "download" : "manual",
+  };
+}
+
 async function checkForUpdates() {
   const currentVersion = app.getVersion();
   const config = getUpdaterConfig();
@@ -521,11 +542,12 @@ async function checkForUpdates() {
     }
 
     const manifest = parseLatestManifest(await response.text());
-    if (!manifest.version || !manifest.url || !manifest.sha256 || !manifest.sha512 || !manifest.path) {
+    const asset = getManifestAssetForPlatform(manifest);
+    if (!manifest.version || !asset.url || !asset.sha256 || !asset.sha512 || !asset.path) {
       return {
         available: false,
         currentVersion,
-        error: "Update manifest is incomplete.",
+        error: `Update manifest is incomplete for ${process.platform}.`,
         manualUrl: config.releasesUrl,
       };
     }
@@ -534,11 +556,12 @@ async function checkForUpdates() {
       currentVersion,
       latestVersion: manifest.version,
       releaseDate: manifest.releaseDate || null,
-      url: manifest.url,
-      path: path.basename(manifest.path),
-      sha256: manifest.sha256,
-      sha512: manifest.sha512,
-      size: manifest.size || null,
+      url: asset.url,
+      path: path.basename(asset.path),
+      sha256: asset.sha256,
+      sha512: asset.sha512,
+      size: asset.size,
+      installMode: asset.installMode,
       manualUrl: config.releasesUrl,
     };
 
@@ -625,6 +648,15 @@ async function downloadToFileWithProgress(url, targetPath, event) {
 }
 
 async function downloadAndInstallUpdate(event) {
+  if (process.platform !== "win32") {
+    await checkForUpdates();
+    return {
+      started: false,
+      manual: true,
+      message: "Updates for this platform are installed from GitHub Releases.",
+      manualUrl: latestUpdate && latestUpdate.manualUrl || getUpdaterConfig().releasesUrl,
+    };
+  }
   if (!latestUpdate || compareVersions(latestUpdate.latestVersion, latestUpdate.currentVersion) <= 0) {
     await checkForUpdates();
   }

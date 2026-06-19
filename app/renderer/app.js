@@ -791,7 +791,10 @@ function closeUpdateModal() {
 function showUpdateModal(update) {
   availableUpdate = update;
   updateTitle.textContent = "Update available";
-  updateMessage.textContent = "A new installer will be downloaded and started.";
+  const manualInstall = update && update.installMode === "manual";
+  updateMessage.textContent = manualInstall
+    ? "A new version is available. Open the latest GitHub release to download it for this platform."
+    : "A new installer will be downloaded and started.";
   updateVersionLabel.textContent = "Version";
   updateVersion.textContent = `${update.currentVersion} -> ${update.latestVersion}`;
   updateDateLabel.textContent = "Date";
@@ -799,8 +802,8 @@ function showUpdateModal(update) {
   updateDownload.disabled = false;
   updateDownload.hidden = false;
   setButtonLabel(updateSkip, "Skip");
-  setButtonLabel(updateDownload, "Download now");
-  updateDownload.dataset.mode = "download";
+  setButtonLabel(updateDownload, manualInstall ? "Open GitHub" : "Download now");
+  updateDownload.dataset.mode = manualInstall ? "manual" : "download";
   updateModal.hidden = false;
   updateDownload.focus();
 }
@@ -2722,6 +2725,11 @@ updateDownload.addEventListener("click", async () => {
   try {
     const result = await window.nesApp.downloadAndInstallUpdate();
     stopProgress();
+    if (result && result.manual) {
+      await window.nesApp.openManualUpdateDownload();
+      closeUpdateModal();
+      return;
+    }
     if (result && result.started === false) {
       showNoUpdateModal({
         currentVersion: availableUpdate && availableUpdate.currentVersion,

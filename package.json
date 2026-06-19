@@ -9,9 +9,13 @@
     "dev": "electron .",
     "start": "electron .",
     "pack": "electron-builder --dir",
+    "pack:win": "electron-builder --win --dir",
+    "pack:linux": "electron-builder --linux AppImage",
     "setup": "node scripts/build-inno.js",
-    "dist": "npm run pack && npm run setup",
+    "dist": "npm run pack:win && npm run setup",
+    "dist:linux": "npm run pack:linux",
     "release": "node scripts/release.js",
+    "release:linux": "node scripts/release.js --linux-only --no-bump",
     "patch": "node scripts/release.js --patch",
     "preflight": "node --check app/main.js && node --check app/preload.js && node --check app/renderer/app.js && node --check app/renderer/crt/crt-filter.js && node --check scripts/build-inno.js && node --check scripts/release.js",
     "repair:electron": "node node_modules/electron/install.js",
@@ -35,8 +39,16 @@
       "node_modules/@fortawesome/fontawesome-free/css/all.min.css",
       "node_modules/@fortawesome/fontawesome-free/webfonts/**/*"
     ],
+    "artifactName": "NES-Emulator-${version}-${os}-${arch}.${ext}",
     "win": {
       "icon": "icons/app.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "icons/app.png",
+      "category": "Game"
     }
   },
   "devDependencies": {
