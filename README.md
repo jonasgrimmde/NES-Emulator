@@ -101,7 +101,3 @@ https://github.com/jonasgrimmde/NES-Emulator/releases/latest/download/latest.yml
 ```
 
 Windows updates download and start the verified installer. Linux updates open the latest GitHub Release; users can rerun the Linux install command to update.
-
-## Public Repo Safety
-
-Do not commit ROMs, BIOS files, saves, archives, `.env` files, tokens, or build output. The `.gitignore` blocks common sensitive/generated files including `node_modules/`, `dist/`, `.env`, key/certificate files, ROM extensions like `.nes`, `Games/`, `Saves/`, and `TAS/`.
