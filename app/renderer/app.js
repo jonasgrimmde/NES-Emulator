@@ -12,6 +12,7 @@ const createFolderConfirm = document.getElementById("createFolderConfirm");
 const createFolderCancel = document.getElementById("createFolderCancel");
 const refreshGamesButton = document.getElementById("refreshGames");
 const openGamesButton = document.getElementById("openGames");
+const openExternalRomButton = document.getElementById("openExternalRom");
 const openSavesButton = document.getElementById("openSaves");
 const openSettingsButton = document.getElementById("openSettings");
 const startButton = document.getElementById("start");
@@ -1936,7 +1937,7 @@ openGamesButton.addEventListener("click", async () => {
   }
 });
 
-openRomButton.addEventListener("click", async () => {
+openExternalRomButton.addEventListener("click", async () => {
   try {
     const game = await window.nesApp.openRomFile();
     if (!game) {
@@ -1953,6 +1954,21 @@ openRomButton.addEventListener("click", async () => {
     if (selected) {
       setStatus(`Opened ${game.title}. Press Start or double-click to load.`);
     }
+  } catch (error) {
+    setStatus(error.message || String(error));
+  }
+});
+
+openRomButton.addEventListener("click", async () => {
+  try {
+    const game = await window.nesApp.importRomFile(currentFolder);
+    if (!game) {
+      return;
+    }
+    rememberGame(game);
+    await loadGameDirectory(currentFolder);
+    await selectGame(game, { skipCompatibilityWarning: true });
+    setStatus(`Imported ${game.filename} to ${currentFolder ? `Games / ${currentFolder}` : "Games"}.`);
   } catch (error) {
     setStatus(error.message || String(error));
   }

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("nesApp", {
   getGameEntryPath: (relativePath) => ipcRenderer.invoke("games:getEntryPath", relativePath),
   listGames: () => ipcRenderer.invoke("games:list"),
   createGameFolder: (parentRelativeDir, folderName) => ipcRenderer.invoke("games:createFolder", parentRelativeDir, folderName),
+  importRomFile: (targetRelativeDir) => ipcRenderer.invoke("games:importFile", targetRelativeDir),
   renameGameEntry: (relativePath, newName) => ipcRenderer.invoke("games:renameEntry", relativePath, newName),
   moveGameEntry: (relativePath, targetRelativeDir) => ipcRenderer.invoke("games:moveEntry", relativePath, targetRelativeDir),
   deleteGameEntry: (relativePath) => ipcRenderer.invoke("games:deleteEntry", relativePath),

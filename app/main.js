@@ -855,6 +855,38 @@ function createLibraryFolder(parentRelativeDir = "", folderName) {
   return directoryFromEntry(nextPath, getGamesDir(), nextName);
 }
 
+async function importRomFile(targetRelativeDir = "") {
+  ensureAppDirs();
+  const result = await dialog.showOpenDialog({
+    title: "Import NES ROM",
+    properties: ["openFile"],
+    filters: [
+      { name: "NES ROMs", extensions: ["nes"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const sourcePath = result.filePaths[0];
+  if (!sourcePath.toLowerCase().endsWith(".nes")) {
+    throw new Error("Selected file is not a .nes ROM.");
+  }
+  const targetDir = resolveInside(getGamesDir(), targetRelativeDir || "");
+  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+    throw new Error("Target folder not found.");
+  }
+  const targetPath = path.join(targetDir, path.basename(sourcePath));
+  resolveInside(getGamesDir(), toRelativePath(getGamesDir(), targetPath));
+  if (fs.existsSync(targetPath)) {
+    throw new Error("A ROM with that filename already exists in this folder.");
+  }
+
+  await fsp.copyFile(sourcePath, targetPath);
+  return Object.assign({ type: "game" }, gameFromFile(targetPath, getGamesDir()));
+}
+
 function moveLibraryEntry(relativePath, targetRelativeDir = "") {
   const entryPath = getLibraryEntryPath(relativePath);
   if (!fs.existsSync(entryPath)) {
@@ -976,6 +1008,7 @@ app.whenReady().then(() => {
   ipcMain.handle("games:getEntryPath", (_event, relativePath) => getLibraryEntryAbsolutePath(relativePath));
   ipcMain.handle("games:list", () => listGames());
   ipcMain.handle("games:createFolder", (_event, parentRelativeDir, folderName) => createLibraryFolder(parentRelativeDir, folderName));
+  ipcMain.handle("games:importFile", (_event, targetRelativeDir) => importRomFile(targetRelativeDir));
   ipcMain.handle("games:renameEntry", (_event, relativePath, newName) => renameLibraryEntry(relativePath, newName));
   ipcMain.handle("games:moveEntry", (_event, relativePath, targetRelativeDir) => moveLibraryEntry(relativePath, targetRelativeDir));
   ipcMain.handle("games:deleteEntry", (_event, relativePath) => deleteLibraryEntry(relativePath));
