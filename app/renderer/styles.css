@@ -192,6 +192,7 @@ h1 {
 }
 
 .browser-actions {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -200,6 +201,61 @@ h1 {
 .browser-actions .icon-only {
   min-height: 38px;
   aspect-ratio: auto;
+}
+
+.new-folder-popover {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 6px);
+  left: 50%;
+  width: min(240px, calc(100vw - 36px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  gap: 6px;
+  padding: 7px;
+  background: #101010;
+  border: 1px solid #4b3a1b;
+  border-radius: 6px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5), inset 0 0 0 1px #050505;
+  transform: translateX(-50%);
+}
+
+.new-folder-popover[hidden] {
+  display: none;
+}
+
+.new-folder-popover::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: #101010;
+  border-left: 1px solid #4b3a1b;
+  border-top: 1px solid #4b3a1b;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.new-folder-popover input {
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--text);
+  background: #050505;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 13px var(--mono-font);
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.new-folder-popover input:focus {
+  border-color: var(--gold);
+}
+
+.new-folder-popover .icon-only {
+  min-height: 34px;
 }
 
 .browser-title {

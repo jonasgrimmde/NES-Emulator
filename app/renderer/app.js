@@ -6,6 +6,10 @@ const folderPathEl = document.getElementById("folderPath");
 const upFolderButton = document.getElementById("upFolder");
 const openRomButton = document.getElementById("openRom");
 const newFolderButton = document.getElementById("newFolder");
+const newFolderPopover = document.getElementById("newFolderPopover");
+const newFolderNameInput = document.getElementById("newFolderName");
+const createFolderConfirm = document.getElementById("createFolderConfirm");
+const createFolderCancel = document.getElementById("createFolderCancel");
 const refreshGamesButton = document.getElementById("refreshGames");
 const openGamesButton = document.getElementById("openGames");
 const openSavesButton = document.getElementById("openSaves");
@@ -2012,18 +2016,64 @@ refreshGamesButton.addEventListener("click", async () => {
   }
 });
 
-newFolderButton.addEventListener("click", async () => {
-  const folderName = window.prompt("New folder name", "New Folder");
-  if (folderName === null) {
+function closeNewFolderPopover() {
+  newFolderPopover.hidden = true;
+  newFolderNameInput.value = "";
+}
+
+function openNewFolderPopover() {
+  closeGameContextMenu();
+  newFolderPopover.hidden = false;
+  newFolderNameInput.value = "";
+  requestAnimationFrame(() => {
+    newFolderNameInput.focus();
+  });
+}
+
+async function createFolderFromPopover() {
+  const folderName = newFolderNameInput.value.trim();
+  if (!folderName) {
+    newFolderNameInput.focus();
     return;
   }
   try {
     const folder = await window.nesApp.createGameFolder(currentFolder, folderName);
     focusedBrowserEntryKey = browserEntryKey(folder);
+    closeNewFolderPopover();
     await loadGameDirectory(currentFolder);
     setStatus(`Created folder ${folder.name}.`);
   } catch (error) {
     setStatus(error.message || String(error));
+    newFolderNameInput.focus();
+  }
+}
+
+newFolderButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (newFolderPopover.hidden) {
+    openNewFolderPopover();
+  } else {
+    closeNewFolderPopover();
+  }
+});
+
+createFolderConfirm.addEventListener("click", () => {
+  createFolderFromPopover();
+});
+
+createFolderCancel.addEventListener("click", () => {
+  closeNewFolderPopover();
+});
+
+newFolderNameInput.addEventListener("keydown", (event) => {
+  event.stopPropagation();
+  if (event.key === "Enter") {
+    event.preventDefault();
+    createFolderFromPopover();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeNewFolderPopover();
+    newFolderButton.focus();
   }
 });
 
@@ -2031,12 +2081,16 @@ document.addEventListener("click", (event) => {
   if (gameContextMenu && !gameContextMenu.hidden && !gameContextMenu.contains(event.target)) {
     closeGameContextMenu();
   }
+  if (!newFolderPopover.hidden && !newFolderPopover.contains(event.target) && event.target !== newFolderButton) {
+    closeNewFolderPopover();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
   const typingTarget = event.target && event.target.closest && event.target.closest("input, textarea, select");
   if (event.key === "Escape") {
     closeGameContextMenu();
+    closeNewFolderPopover();
   } else if (
     event.key === "F2"
     && compatModal.hidden

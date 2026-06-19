@@ -27,6 +27,11 @@
             <button id="openRom" class="btn btn-primary icon-only" type="button" title="Open ROM" aria-label="Open ROM"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Open ROM</span></button>
             <button id="newFolder" class="btn icon-only" type="button" title="New folder" aria-label="New folder"><i class="fa-solid fa-folder-plus" aria-hidden="true"></i><span>New Folder</span></button>
             <button id="refreshGames" class="btn icon-only" type="button" title="Refresh library" aria-label="Refresh library"><i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>Refresh</span></button>
+            <div id="newFolderPopover" class="new-folder-popover" hidden>
+              <input id="newFolderName" type="text" autocomplete="off" spellcheck="false" aria-label="Folder name" placeholder="Folder name">
+              <button id="createFolderConfirm" class="btn btn-success icon-only" type="button" title="Create folder" aria-label="Create folder"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Create</span></button>
+              <button id="createFolderCancel" class="btn icon-only" type="button" title="Cancel" aria-label="Cancel"><i class="fa-solid fa-xmark" aria-hidden="true"></i><span>Cancel</span></button>
+            </div>
           </div>
           <div class="browser-path">
             <button id="upFolder" class="btn icon-btn" type="button" title="Up one folder"><i class="fa-solid fa-arrow-up" aria-hidden="true"></i><span>Up</span></button>
