@@ -335,6 +335,20 @@ async function deleteExistingAsset(token, release, assetName) {
   logSuccess(`Deleted ${assetName}`);
 }
 
+async function deleteUnexpectedReleaseAssets(token, release, uploadAssetNames) {
+  const keep = new Set(uploadAssetNames);
+  const extraAssets = (release.assets || []).filter((entry) => !keep.has(entry.name || ""));
+  if (extraAssets.length === 0) {
+    logStep("No extra release assets found.");
+    return;
+  }
+  for (const asset of extraAssets) {
+    logStep(`Delete extra release asset ${asset.name}`);
+    await githubRequest(token, asset.url, { method: "DELETE" });
+    logSuccess(`Deleted ${asset.name}`);
+  }
+}
+
 async function uploadAsset(token, release, filePath, contentType) {
   const assetName = path.basename(filePath);
   await deleteExistingAsset(token, release, assetName);
@@ -528,6 +542,17 @@ async function main() {
     `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`,
   );
 
+  logHeader("Preflight");
+  run("npm", ["run", "preflight"]);
+  logStep("Resolve GitHub token");
+  const token = getGitHubToken();
+  if (!token) {
+    throw new Error(
+      "GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.",
+    );
+  }
+  logSuccess("GitHub auth available");
+
   logHeader("Prepare files");
   logStep("Update package version");
   updatePackageVersion(nextVersion);
@@ -567,15 +592,6 @@ async function main() {
   logInfo("SHA256", manifest.sha256);
 
   logHeader("GitHub");
-  logStep("Resolve GitHub token");
-  const token = getGitHubToken();
-  if (!token) {
-    throw new Error(
-      "GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.",
-    );
-  }
-  logSuccess("GitHub auth available");
-
   logStep(`Create or reuse release ${manifest.tag}`);
   const release = await getOrCreateRelease({
     token,
@@ -588,7 +604,11 @@ async function main() {
   });
   logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
 
-  await deleteExistingAsset(token, release, "NES-Emulator-Windows.7z");
+  const uploadAssetNames = [
+    path.basename(setupUploadPath),
+    path.basename(manifest.manifestPath),
+  ];
+  await deleteUnexpectedReleaseAssets(token, release, uploadAssetNames);
 
   await uploadAsset(
     token,

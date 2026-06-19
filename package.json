@@ -13,6 +13,7 @@
     "dist": "npm run pack && npm run setup",
     "release": "node scripts/release.js",
     "patch": "node scripts/release.js --patch",
+    "preflight": "node --check app/main.js && node --check app/preload.js && node --check app/renderer/app.js && node --check app/renderer/crt/crt-filter.js && node --check scripts/build-inno.js && node --check scripts/release.js",
     "repair:electron": "node node_modules/electron/install.js",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
