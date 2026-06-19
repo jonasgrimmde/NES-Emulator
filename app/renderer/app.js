@@ -126,6 +126,24 @@ function setButtonLabel(button, text) {
   }
 }
 
+
+function updateDiscordIdle() {
+  if (window.nesApp && window.nesApp.setDiscordIdle) {
+    window.nesApp.setDiscordIdle().catch(() => {});
+  }
+}
+
+function updateDiscordPlaying(game = currentGame) {
+  if (game && window.nesApp && window.nesApp.setDiscordGame) {
+    window.nesApp.setDiscordGame(game.title, { paused: false }).catch(() => {});
+  }
+}
+
+function updateDiscordPaused(game = currentGame) {
+  if (game && window.nesApp && window.nesApp.setDiscordGame) {
+    window.nesApp.setDiscordGame(game.title, { paused: true }).catch(() => {});
+  }
+}
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -1257,12 +1275,14 @@ function startEmulation() {
   stopFrameLoop();
   frameRequestId = window.requestAnimationFrame(runFrameLoop);
   startAutosaveTimer();
+  updateDiscordPlaying();
 }
 
 function stopEmulation() {
   running = false;
   pausedByPage = false;
   stopAutosaveTimer();
+  updateDiscordIdle();
   if (browser) {
     stopFrameLoop();
     if (browser._speakers) {
@@ -1280,6 +1300,7 @@ function pauseForPageLifecycle() {
   pausedByPage = true;
   releaseAllInputs();
   pauseRuntime();
+  updateDiscordPaused();
 }
 
 function resumeFromPageLifecycle() {
@@ -1293,6 +1314,7 @@ function resumeFromPageLifecycle() {
     startAutosaveTimer();
     setButtonLabel(pauseButton, "Pause");
     setStatus(`${currentGame.title} running.`);
+    updateDiscordPlaying();
   }
 }
 
@@ -1535,6 +1557,7 @@ async function startSelectedGame() {
     setRunControlsEnabled(true);
     setButtonLabel(pauseButton, "Pause");
     setStatus(`${currentGame.title} running.`);
+    updateDiscordPlaying();
     renderSaveSlots();
   } catch (error) {
     startButton.disabled = false;
@@ -1554,10 +1577,12 @@ pauseButton.addEventListener("click", () => {
     stopEmulation();
     setButtonLabel(pauseButton, "Resume");
     setStatus("Paused.");
+    updateDiscordPaused();
   } else {
     startEmulation();
     setButtonLabel(pauseButton, "Pause");
     setStatus("Running.");
+    updateDiscordPlaying();
   }
 });
 

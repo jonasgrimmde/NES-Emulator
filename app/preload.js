@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld("nesApp", {
     return () => ipcRenderer.removeListener("updates:downloadProgress", listener);
   },
   openManualUpdateDownload: () => ipcRenderer.invoke("updates:openManualDownload"),
+  getDiscordStatus: () => ipcRenderer.invoke("discord:status"),
+  setDiscordIdle: () => ipcRenderer.invoke("discord:setIdle"),
+  setDiscordGame: (gameTitle, options) => ipcRenderer.invoke("discord:setGame", gameTitle, options),
+  clearDiscordActivity: () => ipcRenderer.invoke("discord:clear"),
   readRom: (id) => ipcRenderer.invoke("rom:read", id),
   listSaves: (gameId) => ipcRenderer.invoke("saves:list", gameId),
   readSave: (gameId, slot) => ipcRenderer.invoke("saves:read", gameId, slot),

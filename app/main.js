@@ -3,8 +3,10 @@ const { spawn } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { createDiscordRpc } = require("./discord-rpc");
 
 const externalGames = new Map();
+let discordRpc = null;
 let latestUpdate = null;
 const defaultSettings = {
   schemaVersion: 1,
@@ -195,6 +197,32 @@ function ensureAppDirs() {
   fs.mkdirSync(getGamesDir(), { recursive: true });
   fs.mkdirSync(getSavesDir(), { recursive: true });
   fs.mkdirSync(getTempDir(), { recursive: true });
+}
+
+function loadLocalEnv() {
+  const envPath = path.join(__dirname, "..", ".env");
+  if (!fs.existsSync(envPath)) {
+    return;
+  }
+  const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const separator = trimmed.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+    const key = trimmed.slice(0, separator).trim();
+    let value = trimmed.slice(separator + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
 }
 
 function cloneDefaultSettings() {
@@ -752,6 +780,10 @@ app.setPath("userData", path.join(getAppRootDir(), "User Data"));
 
 app.whenReady().then(() => {
   ensureAppDirs();
+  loadLocalEnv();
+  discordRpc = createDiscordRpc();
+  discordRpc.start();
+  discordRpc.setIdle();
 
   ipcMain.handle("games:listDirectory", (_event, relativeDir) => listGameDirectory(relativeDir));
   ipcMain.handle("games:list", () => listGames());
@@ -763,6 +795,25 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:reset", () => resetSettings());
   ipcMain.handle("settings:defaults", () => getDefaultSettings());
   ipcMain.handle("app:version", () => app.getVersion());
+  ipcMain.handle("discord:status", () => discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false });
+  ipcMain.handle("discord:setIdle", () => {
+    if (discordRpc) {
+      discordRpc.setIdle();
+    }
+    return discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false };
+  });
+  ipcMain.handle("discord:setGame", (_event, gameTitle, options) => {
+    if (discordRpc) {
+      discordRpc.setGame(gameTitle, options || {});
+    }
+    return discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false };
+  });
+  ipcMain.handle("discord:clear", () => {
+    if (discordRpc) {
+      discordRpc.clear();
+    }
+    return discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false };
+  });
   ipcMain.handle("app:openExternal", async (_event, url) => {
     const parsedUrl = new URL(String(url));
     if (!["https:", "http:"].includes(parsedUrl.protocol)) {
@@ -906,6 +957,12 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  if (discordRpc) {
+    discordRpc.stop();
+  }
 });
 
 app.on("window-all-closed", () => {
