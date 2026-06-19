@@ -837,6 +837,66 @@ function renameLibraryEntry(relativePath, newName) {
     : Object.assign({ type: "game" }, gameFromFile(nextPath, getGamesDir()));
 }
 
+function createLibraryFolder(parentRelativeDir = "", folderName) {
+  ensureAppDirs();
+  const parentDir = resolveInside(getGamesDir(), parentRelativeDir || "");
+  if (!fs.existsSync(parentDir) || !fs.statSync(parentDir).isDirectory()) {
+    throw new Error("Parent folder not found.");
+  }
+
+  const nextName = sanitizeEntryName(folderName);
+  const nextPath = path.join(parentDir, nextName);
+  resolveInside(getGamesDir(), toRelativePath(getGamesDir(), nextPath));
+  if (fs.existsSync(nextPath)) {
+    throw new Error("An entry with that name already exists.");
+  }
+
+  fs.mkdirSync(nextPath);
+  return directoryFromEntry(nextPath, getGamesDir(), nextName);
+}
+
+function moveLibraryEntry(relativePath, targetRelativeDir = "") {
+  const entryPath = getLibraryEntryPath(relativePath);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error("Entry not found.");
+  }
+  const stats = fs.statSync(entryPath);
+  if (!stats.isDirectory() && !(stats.isFile() && entryPath.toLowerCase().endsWith(".nes"))) {
+    throw new Error("Entry cannot be moved.");
+  }
+
+  const gamesDir = getGamesDir();
+  const targetDir = resolveInside(gamesDir, targetRelativeDir || "");
+  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+    throw new Error("Target folder not found.");
+  }
+  if (stats.isDirectory()) {
+    const sourceWithSep = `${entryPath}${path.sep}`;
+    const targetWithSep = `${targetDir}${path.sep}`;
+    if (targetDir === entryPath || targetWithSep.startsWith(sourceWithSep)) {
+      throw new Error("A folder cannot be moved into itself.");
+    }
+  }
+
+  const currentDir = path.dirname(entryPath);
+  if (currentDir === targetDir) {
+    return stats.isDirectory()
+      ? directoryFromEntry(entryPath, gamesDir, path.basename(entryPath))
+      : Object.assign({ type: "game" }, gameFromFile(entryPath, gamesDir));
+  }
+
+  const nextPath = path.join(targetDir, path.basename(entryPath));
+  resolveInside(gamesDir, toRelativePath(gamesDir, nextPath));
+  if (fs.existsSync(nextPath)) {
+    throw new Error("An entry with that name already exists in the target folder.");
+  }
+
+  fs.renameSync(entryPath, nextPath);
+  return stats.isDirectory()
+    ? directoryFromEntry(nextPath, gamesDir, path.basename(nextPath))
+    : Object.assign({ type: "game" }, gameFromFile(nextPath, gamesDir));
+}
+
 function deleteLibraryEntry(relativePath) {
   const entryPath = getLibraryEntryPath(relativePath);
   if (!fs.existsSync(entryPath)) {
@@ -915,7 +975,9 @@ app.whenReady().then(() => {
   ipcMain.handle("games:refreshMeta", (_event, relativePath) => readLibraryRomMeta(relativePath, { force: true }));
   ipcMain.handle("games:getEntryPath", (_event, relativePath) => getLibraryEntryAbsolutePath(relativePath));
   ipcMain.handle("games:list", () => listGames());
+  ipcMain.handle("games:createFolder", (_event, parentRelativeDir, folderName) => createLibraryFolder(parentRelativeDir, folderName));
   ipcMain.handle("games:renameEntry", (_event, relativePath, newName) => renameLibraryEntry(relativePath, newName));
+  ipcMain.handle("games:moveEntry", (_event, relativePath, targetRelativeDir) => moveLibraryEntry(relativePath, targetRelativeDir));
   ipcMain.handle("games:deleteEntry", (_event, relativePath) => deleteLibraryEntry(relativePath));
   ipcMain.handle("games:revealEntry", (_event, relativePath) => revealLibraryEntry(relativePath));
   ipcMain.handle("settings:read", () => readSettings());

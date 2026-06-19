@@ -5,6 +5,7 @@ const gameCount = document.getElementById("gameCount");
 const folderPathEl = document.getElementById("folderPath");
 const upFolderButton = document.getElementById("upFolder");
 const openRomButton = document.getElementById("openRom");
+const newFolderButton = document.getElementById("newFolder");
 const refreshGamesButton = document.getElementById("refreshGames");
 const openGamesButton = document.getElementById("openGames");
 const openSavesButton = document.getElementById("openSaves");
@@ -92,6 +93,7 @@ let renameCommitInProgress = false;
 let gameListRenderToken = 0;
 let metaHydrationToken = 0;
 let suppressGameDoubleClickUntil = 0;
+let draggedEntryKey = "";
 
 const keybindButtons = [
   ["p1", "UP", "P1 Up"],
@@ -646,6 +648,31 @@ function entryContainsGame(entry, game) {
   return entry.type === "game" && game.id === entry.id;
 }
 
+function getParentFolder(relativeDir = currentFolder) {
+  return relativeDir ? relativeDir.split("/").slice(0, -1).join("/") : "";
+}
+
+function getEntryParentFolder(entry) {
+  if (!entry || !entry.relativePath) {
+    return "";
+  }
+  return entry.relativePath.split("/").slice(0, -1).join("/");
+}
+
+function canDropEntryOnFolder(entry, targetRelativeDir) {
+  if (!isLibraryEntry(entry)) {
+    return false;
+  }
+  const targetDir = targetRelativeDir || "";
+  if (getEntryParentFolder(entry) === targetDir) {
+    return false;
+  }
+  if (entry.type === "folder") {
+    return targetDir !== entry.relativePath && !targetDir.startsWith(`${entry.relativePath}/`);
+  }
+  return true;
+}
+
 function closeGameContextMenu() {
   if (gameContextMenu) {
     gameContextMenu.hidden = true;
@@ -844,6 +871,49 @@ async function deleteGameContextEntry(entry) {
   await window.nesApp.deleteGameEntry(entry.relativePath);
   await reloadGameList(null);
   setStatus(`Deleted ${label}.`);
+}
+
+async function moveGameEntryToFolder(entry, targetRelativeDir) {
+  if (!canDropEntryOnFolder(entry, targetRelativeDir)) {
+    return;
+  }
+  const label = entry.type === "folder" ? entry.name : entry.title;
+  const affectsCurrent = entryContainsGame(entry, currentGame);
+  const affectsSelected = entryContainsGame(entry, selectedGame);
+  const moved = await window.nesApp.moveGameEntry(entry.relativePath, targetRelativeDir || "");
+
+  if (moved.type === "game") {
+    rememberGame(moved);
+    if (affectsSelected) {
+      selectedGame = moved;
+    }
+    if (affectsCurrent) {
+      currentGame = moved;
+      gameTitleEl.textContent = moved.title;
+    }
+  } else if (affectsCurrent || affectsSelected) {
+    await saveAutoNow("move-folder");
+    stopEmulation();
+    if (browser) {
+      browser.destroy();
+      browser = null;
+    }
+    currentGame = null;
+    selectedGame = null;
+    startButton.disabled = true;
+    setRunControlsEnabled(false);
+    gameTitleEl.textContent = "NES Emulator";
+  }
+
+  focusedBrowserEntryKey = browserEntryKey(moved);
+  await loadGameDirectory(currentFolder);
+  if (getSelectedGame()) {
+    selectedSlot = readSelectedSlot();
+    await refreshSaveMeta();
+    renderSaveSlots();
+  }
+  const targetLabel = targetRelativeDir ? `Games / ${targetRelativeDir}` : "Games";
+  setStatus(`Moved ${label} to ${targetLabel}.`);
 }
 
 async function revealGameContextEntry(entry) {
@@ -1535,6 +1605,13 @@ function createGameListItem(entry, state) {
         loadGameDirectory(entry.relativePath);
       }
     });
+    item.addEventListener("dragover", (event) => handleDragOverFolder(event, entry.relativePath, item));
+    item.addEventListener("dragleave", (event) => {
+      if (!item.contains(event.relatedTarget)) {
+        item.classList.remove("drop-target", "drop-denied");
+      }
+    });
+    item.addEventListener("drop", (event) => handleDropOnFolder(event, entry.relativePath));
     item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
   } else {
     rememberGame(entry);
@@ -1577,6 +1654,7 @@ function createGameListItem(entry, state) {
     });
     item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
   }
+  attachDragHandlers(item, entry, isRenaming);
   item.addEventListener("focus", () => {
     focusedBrowserEntryKey = key;
   });
@@ -1632,6 +1710,71 @@ function updateSelectedGameListDom() {
     item.classList.toggle("active", isSelected);
     item.setAttribute("aria-selected", isSelected ? "true" : "false");
   }
+}
+
+function getDraggedEntry(event) {
+  const key = event.dataTransfer ? event.dataTransfer.getData("application/x-nes-entry-key") : "";
+  return findBrowserEntryByKey(key || draggedEntryKey);
+}
+
+function clearDropTargets() {
+  gameList.classList.remove("drop-target", "drop-denied");
+  upFolderButton.classList.remove("drop-target", "drop-denied");
+  gameList.querySelectorAll(".drop-target, .drop-denied").forEach((element) => {
+    element.classList.remove("drop-target", "drop-denied");
+  });
+}
+
+function updateDropTarget(element, entry, targetRelativeDir) {
+  const allowed = canDropEntryOnFolder(entry, targetRelativeDir);
+  element.classList.toggle("drop-target", allowed);
+  element.classList.toggle("drop-denied", !allowed);
+  return allowed;
+}
+
+function handleDragOverFolder(event, targetRelativeDir, element) {
+  const entry = getDraggedEntry(event);
+  if (!entry) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  event.dataTransfer.dropEffect = updateDropTarget(element, entry, targetRelativeDir) ? "move" : "none";
+}
+
+async function handleDropOnFolder(event, targetRelativeDir) {
+  const entry = getDraggedEntry(event);
+  event.stopPropagation();
+  clearDropTargets();
+  if (!entry) {
+    return;
+  }
+  event.preventDefault();
+  try {
+    await moveGameEntryToFolder(entry, targetRelativeDir);
+  } catch (error) {
+    setStatus(error.message || String(error));
+  }
+}
+
+function attachDragHandlers(item, entry, isRenaming) {
+  if (!isLibraryEntry(entry) || isRenaming) {
+    return;
+  }
+  item.draggable = true;
+  item.addEventListener("dragstart", (event) => {
+    draggedEntryKey = browserEntryKey(entry);
+    item.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-nes-entry-key", draggedEntryKey);
+    event.dataTransfer.setData("text/plain", entry.relativePath);
+    closeGameContextMenu();
+  });
+  item.addEventListener("dragend", () => {
+    draggedEntryKey = "";
+    item.classList.remove("dragging");
+    clearDropTargets();
+  });
 }
 
 async function hydrateRomMetaForEntries(entries, token) {
@@ -1816,16 +1959,69 @@ upFolderButton.addEventListener("click", async () => {
     return;
   }
   try {
-    const parentFolder = currentFolder.split("/").slice(0, -1).join("/");
+    const parentFolder = getParentFolder();
     await loadGameDirectory(parentFolder);
   } catch (error) {
     setStatus(error.message || String(error));
   }
 });
 
+upFolderButton.addEventListener("dragover", (event) => {
+  if (!currentFolder) {
+    return;
+  }
+  handleDragOverFolder(event, getParentFolder(), upFolderButton);
+});
+
+upFolderButton.addEventListener("dragleave", () => {
+  upFolderButton.classList.remove("drop-target", "drop-denied");
+});
+
+upFolderButton.addEventListener("drop", (event) => {
+  if (!currentFolder) {
+    return;
+  }
+  handleDropOnFolder(event, getParentFolder());
+});
+
+gameList.addEventListener("dragover", (event) => {
+  if (event.target.closest(".game-item")) {
+    return;
+  }
+  handleDragOverFolder(event, currentFolder, gameList);
+});
+
+gameList.addEventListener("dragleave", (event) => {
+  if (!gameList.contains(event.relatedTarget)) {
+    gameList.classList.remove("drop-target", "drop-denied");
+  }
+});
+
+gameList.addEventListener("drop", (event) => {
+  if (event.target.closest(".game-item")) {
+    return;
+  }
+  handleDropOnFolder(event, currentFolder);
+});
+
 refreshGamesButton.addEventListener("click", async () => {
   try {
     await reloadGameList();
+  } catch (error) {
+    setStatus(error.message || String(error));
+  }
+});
+
+newFolderButton.addEventListener("click", async () => {
+  const folderName = window.prompt("New folder name", "New Folder");
+  if (folderName === null) {
+    return;
+  }
+  try {
+    const folder = await window.nesApp.createGameFolder(currentFolder, folderName);
+    focusedBrowserEntryKey = browserEntryKey(folder);
+    await loadGameDirectory(currentFolder);
+    setStatus(`Created folder ${folder.name}.`);
   } catch (error) {
     setStatus(error.message || String(error));
   }
