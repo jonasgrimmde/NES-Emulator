@@ -541,11 +541,30 @@ h1 {
   image-rendering: pixelated;
 }
 
+#nes canvas:not(.crt-output) {
+  z-index: 1;
+}
+
+.nes-splash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+#nes.has-game .nes-splash {
+  display: none;
+}
+
 #nes.crt-active canvas:not(.crt-output) {
   opacity: 0;
 }
 
-#nes:not(.crt-active) canvas.crt-output {
+#nes:not(.crt-active) canvas.crt-output,
+#nes:not(.has-game) canvas.crt-output {
   display: none;
 }
 

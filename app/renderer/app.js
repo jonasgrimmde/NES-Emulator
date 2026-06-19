@@ -395,6 +395,10 @@ function getNesSourceCanvas() {
   return document.querySelector("#nes canvas:not(.crt-output)");
 }
 
+function updateNesSplash() {
+  document.getElementById("nes").classList.toggle("has-game", Boolean(browser));
+}
+
 function ensureCrtFilter() {
   if (!crtFilter && window.CRTFilter) {
     try {
@@ -1075,6 +1079,7 @@ async function commitInlineRename(entry, input) {
       if (browser) {
         browser.destroy();
         browser = null;
+        updateNesSplash();
       }
       currentGame = null;
       selectedGame = null;
@@ -1131,6 +1136,7 @@ async function deleteGameContextEntry(entry) {
     if (browser) {
       browser.destroy();
       browser = null;
+      updateNesSplash();
     }
     currentGame = null;
     selectedGame = null;
@@ -1168,6 +1174,7 @@ async function moveGameEntryToFolder(entry, targetRelativeDir) {
     if (browser) {
       browser.destroy();
       browser = null;
+      updateNesSplash();
     }
     currentGame = null;
     selectedGame = null;
@@ -1626,6 +1633,7 @@ async function createBrowser() {
     container: document.getElementById("nes"),
     onError: (error) => setStatus(error.message || String(error)),
   });
+  updateNesSplash();
   stabilizeRuntime();
   browser.nes.loadROM(await loadRom());
   browser.nes.setFramerate(framesPerSecond);
@@ -1837,6 +1845,7 @@ async function loadSelectedGameForStart() {
   if (browser) {
     browser.destroy();
     browser = null;
+    updateNesSplash();
   }
   currentGame = game;
   selectedGame = game;
