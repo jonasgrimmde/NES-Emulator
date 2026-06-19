@@ -218,12 +218,12 @@ function rememberRomMeta(filePath, stats, meta) {
   return meta;
 }
 
-async function readRomMetaCached(filePath) {
+async function readRomMetaCached(filePath, options = {}) {
   const stats = await fsp.stat(filePath);
   if (!stats.isFile()) {
     throw new Error("Selected entry is not a ROM file.");
   }
-  const cached = getCachedRomMeta(filePath, stats);
+  const cached = options.force ? null : getCachedRomMeta(filePath, stats);
   if (cached) {
     return cached;
   }
@@ -730,7 +730,7 @@ async function listGameDirectory(relativeDir = "") {
   };
 }
 
-async function readLibraryRomMeta(relativePath) {
+function getLibraryRomPath(relativePath) {
   ensureAppDirs();
   if (!relativePath) {
     throw new Error("Entry not found.");
@@ -739,7 +739,19 @@ async function readLibraryRomMeta(relativePath) {
   if (!entryPath.toLowerCase().endsWith(".nes")) {
     throw new Error("Selected file is not a .nes ROM.");
   }
-  return readRomMetaCached(entryPath);
+  return entryPath;
+}
+
+async function readLibraryRomMeta(relativePath, options = {}) {
+  return readRomMetaCached(getLibraryRomPath(relativePath), options);
+}
+
+function getLibraryEntryAbsolutePath(relativePath) {
+  const entryPath = getLibraryEntryPath(relativePath);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error("Entry not found.");
+  }
+  return entryPath;
 }
 
 function walkGames(dir, baseDir, games = []) {
@@ -900,6 +912,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("games:listDirectory", (_event, relativeDir) => listGameDirectory(relativeDir));
   ipcMain.handle("games:readMeta", (_event, relativePath) => readLibraryRomMeta(relativePath));
+  ipcMain.handle("games:refreshMeta", (_event, relativePath) => readLibraryRomMeta(relativePath, { force: true }));
+  ipcMain.handle("games:getEntryPath", (_event, relativePath) => getLibraryEntryAbsolutePath(relativePath));
   ipcMain.handle("games:list", () => listGames());
   ipcMain.handle("games:renameEntry", (_event, relativePath, newName) => renameLibraryEntry(relativePath, newName));
   ipcMain.handle("games:deleteEntry", (_event, relativePath) => deleteLibraryEntry(relativePath));

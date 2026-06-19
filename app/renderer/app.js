@@ -664,6 +664,10 @@ function getGameContextMenu() {
   gameContextMenu.hidden = true;
   gameContextMenu.innerHTML = `
     <button type="button" data-action="open"><i class="fa-solid fa-play" aria-hidden="true"></i><span>Start</span></button>
+    <button type="button" data-action="rom-info" data-game-only="true"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>ROM Info</span></button>
+    <button type="button" data-action="refresh-meta" data-library-game-only="true"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>Refresh ROM Info</span></button>
+    <button type="button" data-action="copy-path"><i class="fa-solid fa-copy" aria-hidden="true"></i><span>Copy Path</span></button>
+    <button type="button" data-action="open-saves" data-game-only="true"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i><span>Open Saves Folder</span></button>
     <button type="button" data-action="rename"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Rename</span></button>
     <button type="button" data-action="reveal"><i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Show in Explorer</span></button>
     <button type="button" data-action="delete" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Delete</span></button>
@@ -699,9 +703,16 @@ function showGameContextMenu(event, entry) {
   if (openButton) {
     openButton.textContent = entry.type === "folder" ? "Open" : "Start";
   }
+  menu.querySelectorAll("[data-game-only]").forEach((button) => {
+    button.disabled = entry.type !== "game";
+  });
+  menu.querySelectorAll("[data-library-game-only]").forEach((button) => {
+    button.disabled = entry.type !== "game" || !isLibraryEntry(entry);
+  });
   menu.querySelector('[data-action="rename"]').disabled = !isLibraryEntry(entry);
   menu.querySelector('[data-action="delete"]').disabled = !isLibraryEntry(entry);
   menu.querySelector('[data-action="reveal"]').disabled = !isLibraryEntry(entry);
+  menu.querySelector('[data-action="copy-path"]').disabled = entry.source !== "external" && !isLibraryEntry(entry);
   positionGameContextMenu(menu, event.clientX, event.clientY);
 }
 
@@ -843,6 +854,58 @@ async function revealGameContextEntry(entry) {
   setStatus(`Opened ${entryPath}`);
 }
 
+async function getEntryAbsolutePath(entry) {
+  if (!entry) {
+    throw new Error("Entry not found.");
+  }
+  if (entry.source === "external") {
+    return entry.filePath || entry.relativePath;
+  }
+  if (!isLibraryEntry(entry)) {
+    throw new Error("This entry has no local path.");
+  }
+  return window.nesApp.getGameEntryPath(entry.relativePath);
+}
+
+async function copyGameContextPath(entry) {
+  const entryPath = await getEntryAbsolutePath(entry);
+  window.nesApp.copyText(entryPath);
+  setStatus(`Copied path: ${entryPath}`);
+}
+
+async function showGameContextRomInfo(entry) {
+  if (!entry || entry.type !== "game") {
+    return;
+  }
+  await ensureGameMeta(entry);
+  const meta = entry.meta || {};
+  const details = [
+    meta.format || "Unknown format",
+    meta.mapperName ? `${meta.mapperName} / Mapper ${meta.mapper}` : "Unknown mapper",
+    meta.region || "Unknown region",
+    meta.validHeader === false ? "Invalid header" : "Header OK",
+  ];
+  setStatus(`${entry.title}: ${details.join(" | ")}`);
+}
+
+async function refreshGameContextRomInfo(entry) {
+  if (!isLibraryEntry(entry) || entry.type !== "game") {
+    return;
+  }
+  entry.meta = await window.nesApp.refreshGameMeta(entry.relativePath);
+  rememberGame(entry);
+  updateGameEntryMetaDom(entry);
+  setStatus(`Refreshed ROM info for ${entry.title}.`);
+}
+
+async function openGameContextSavesFolder(entry) {
+  if (!entry || entry.type !== "game") {
+    return;
+  }
+  const folderPath = await window.nesApp.openSavesFolder();
+  setStatus(`Opened saves folder: ${folderPath}`);
+}
+
 async function handleGameContextAction(entry, action) {
   if (!entry) {
     return;
@@ -856,6 +919,14 @@ async function handleGameContextAction(entry, action) {
       await deleteGameContextEntry(entry);
     } else if (action === "reveal") {
       await revealGameContextEntry(entry);
+    } else if (action === "copy-path") {
+      await copyGameContextPath(entry);
+    } else if (action === "rom-info") {
+      await showGameContextRomInfo(entry);
+    } else if (action === "refresh-meta") {
+      await refreshGameContextRomInfo(entry);
+    } else if (action === "open-saves") {
+      await openGameContextSavesFolder(entry);
     }
   } catch (error) {
     setStatus(error.message || String(error));

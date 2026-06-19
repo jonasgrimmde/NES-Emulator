@@ -1,10 +1,13 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { clipboard, contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nesApp", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
+  copyText: (text) => clipboard.writeText(String(text || "")),
   listGameDirectory: (relativeDir) => ipcRenderer.invoke("games:listDirectory", relativeDir),
   readGameMeta: (relativePath) => ipcRenderer.invoke("games:readMeta", relativePath),
+  refreshGameMeta: (relativePath) => ipcRenderer.invoke("games:refreshMeta", relativePath),
+  getGameEntryPath: (relativePath) => ipcRenderer.invoke("games:getEntryPath", relativePath),
   listGames: () => ipcRenderer.invoke("games:list"),
   renameGameEntry: (relativePath, newName) => ipcRenderer.invoke("games:renameEntry", relativePath, newName),
   deleteGameEntry: (relativePath) => ipcRenderer.invoke("games:deleteEntry", relativePath),
