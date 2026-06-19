@@ -58,6 +58,7 @@ const frameIntervalMs = 1000 / framesPerSecond;
 const maxFrameElapsedMs = 100;
 const gameListRenderBatchSize = 24;
 const romMetaHydrationBatchSize = 6;
+const folderNavigationDoubleClickGuardMs = 550;
 
 let currentFolder = "";
 let folderEntries = [];
@@ -90,6 +91,7 @@ let renamingEntryKey = "";
 let renameCommitInProgress = false;
 let gameListRenderToken = 0;
 let metaHydrationToken = 0;
+let suppressGameDoubleClickUntil = 0;
 
 const keybindButtons = [
   ["p1", "UP", "P1 Up"],
@@ -1458,6 +1460,7 @@ function createGameListItem(entry, state) {
     item.addEventListener("click", () => {
       focusedBrowserEntryKey = key;
       if (!isRenaming) {
+        suppressGameDoubleClickUntil = performance.now() + folderNavigationDoubleClickGuardMs;
         loadGameDirectory(entry.relativePath);
       }
     });
@@ -1491,6 +1494,9 @@ function createGameListItem(entry, state) {
     });
     item.addEventListener("dblclick", async () => {
       if (isRenaming) {
+        return;
+      }
+      if (performance.now() < suppressGameDoubleClickUntil) {
         return;
       }
       const selected = await selectGame(entry);
