@@ -276,6 +276,10 @@ h1 {
   box-shadow: inset 0 0 0 1px var(--gold);
 }
 
+.game-item.renaming {
+  cursor: text;
+}
+
 .game-item.warning {
   border-color: #73592a;
 }
@@ -320,6 +324,24 @@ h1 {
   white-space: nowrap;
 }
 
+.rename-input {
+  width: 100%;
+  min-width: 0;
+  padding: 2px 4px;
+  color: var(--text);
+  background: #050505;
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  font: inherit;
+  font-weight: 700;
+  outline: none;
+}
+
+.rename-input::selection {
+  color: #090909;
+  background: var(--gold);
+}
+
 .game-folder {
   color: var(--muted);
   font-size: 12px;
@@ -329,6 +351,66 @@ h1 {
   color: #c8a765;
   font-family: var(--mono-font);
   font-size: 11px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 190px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  background: #101010;
+  border: 1px solid #4b3a1b;
+  border-radius: 6px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.58), inset 0 0 0 1px #050505;
+}
+
+.context-menu[hidden] {
+  display: none;
+}
+
+.context-menu button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover:not(:disabled),
+.context-menu button:focus-visible:not(:disabled) {
+  color: #fff8d8;
+  background: #17130a;
+  border-color: #6f5720;
+  outline: none;
+}
+
+.context-menu button:disabled {
+  color: #696969;
+  cursor: default;
+}
+
+.context-menu i {
+  color: var(--gold);
+  text-align: center;
+}
+
+.context-menu .danger i {
+  color: var(--red);
+}
+
+.context-menu .danger:hover:not(:disabled),
+.context-menu .danger:focus-visible:not(:disabled) {
+  border-color: #743333;
+  background: #1a0c0c;
 }
 
 #nes {

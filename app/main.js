@@ -642,6 +642,77 @@ function getRomPath(game) {
   return path.join(getGamesDir(), game.relativePath || game.filename);
 }
 
+function getLibraryEntryPath(relativePath) {
+  ensureAppDirs();
+  if (!relativePath) {
+    throw new Error("Entry not found.");
+  }
+  return resolveInside(getGamesDir(), relativePath);
+}
+
+function sanitizeEntryName(name, options = {}) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed || trimmed === "." || trimmed === ".." || /[/\\]/.test(trimmed)) {
+    throw new Error("Invalid name.");
+  }
+  if (/[<>:"|?*\x00-\x1f]/.test(trimmed)) {
+    throw new Error("Name contains invalid characters.");
+  }
+  if (options.requireNesExtension && !trimmed.toLowerCase().endsWith(".nes")) {
+    return `${trimmed}.nes`;
+  }
+  return trimmed;
+}
+
+function renameLibraryEntry(relativePath, newName) {
+  const entryPath = getLibraryEntryPath(relativePath);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error("Entry not found.");
+  }
+  const stats = fs.statSync(entryPath);
+  if (!stats.isDirectory() && !(stats.isFile() && entryPath.toLowerCase().endsWith(".nes"))) {
+    throw new Error("Entry cannot be renamed.");
+  }
+
+  const nextName = sanitizeEntryName(newName, { requireNesExtension: stats.isFile() });
+  const nextPath = path.join(path.dirname(entryPath), nextName);
+  resolveInside(getGamesDir(), toRelativePath(getGamesDir(), nextPath));
+  if (fs.existsSync(nextPath)) {
+    throw new Error("An entry with that name already exists.");
+  }
+
+  fs.renameSync(entryPath, nextPath);
+  return stats.isDirectory()
+    ? directoryFromEntry(nextPath, getGamesDir(), nextName)
+    : Object.assign({ type: "game" }, gameFromFile(nextPath, getGamesDir()));
+}
+
+function deleteLibraryEntry(relativePath) {
+  const entryPath = getLibraryEntryPath(relativePath);
+  if (!fs.existsSync(entryPath)) {
+    return true;
+  }
+  const stats = fs.statSync(entryPath);
+  if (stats.isDirectory()) {
+    fs.rmSync(entryPath, { recursive: true, force: true });
+    return true;
+  }
+  if (stats.isFile() && entryPath.toLowerCase().endsWith(".nes")) {
+    fs.unlinkSync(entryPath);
+    return true;
+  }
+  throw new Error("Entry cannot be deleted.");
+}
+
+async function revealLibraryEntry(relativePath) {
+  const entryPath = getLibraryEntryPath(relativePath);
+  if (!fs.existsSync(entryPath)) {
+    throw new Error("Entry not found.");
+  }
+  shell.showItemInFolder(entryPath);
+  return entryPath;
+}
+
 function externalGameFromPath(filePath) {
   const filename = path.basename(filePath);
   return {
@@ -684,6 +755,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle("games:listDirectory", (_event, relativeDir) => listGameDirectory(relativeDir));
   ipcMain.handle("games:list", () => listGames());
+  ipcMain.handle("games:renameEntry", (_event, relativePath, newName) => renameLibraryEntry(relativePath, newName));
+  ipcMain.handle("games:deleteEntry", (_event, relativePath) => deleteLibraryEntry(relativePath));
+  ipcMain.handle("games:revealEntry", (_event, relativePath) => revealLibraryEntry(relativePath));
   ipcMain.handle("settings:read", () => readSettings());
   ipcMain.handle("settings:write", (_event, settings) => writeSettings(settings));
   ipcMain.handle("settings:reset", () => resetSettings());
