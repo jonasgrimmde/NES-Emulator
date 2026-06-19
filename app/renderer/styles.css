@@ -1077,7 +1077,7 @@ kbd {
 
 .settings-row {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 54px;
+  grid-template-columns: 120px minmax(0, 1fr) 54px auto;
   gap: 10px;
   align-items: center;
   color: var(--muted);
@@ -1107,9 +1107,9 @@ kbd {
 }
 
 .settings-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   color: var(--muted);
   font-size: 13px;
@@ -1124,7 +1124,7 @@ kbd {
 
 .settings-command {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   color: var(--muted);
@@ -1138,8 +1138,17 @@ kbd {
   gap: 7px;
 }
 
+.keybind-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
 .keybind-button {
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -1156,6 +1165,25 @@ kbd {
 .keybind-button:hover,
 .keybind-button.listening {
   border-color: var(--gold);
+}
+
+.setting-revert {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--gold);
+  background: #151515;
+  border: 1px solid #4b3a1b;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.setting-revert:hover,
+.setting-revert:focus-visible {
+  border-color: var(--gold);
+  background: #1f180c;
 }
 
 .keybind-action {
