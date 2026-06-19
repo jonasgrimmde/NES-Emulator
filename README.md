@@ -24,6 +24,26 @@ The app is designed around local files. It does not ship ROMs, BIOS files, save 
 
 ### Windows
 
+Use the PowerShell install script:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.ps1 | iex
+```
+
+Check installation status:
+
+```powershell
+iex "& { $(iwr -useb https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.ps1) } status"
+```
+
+Uninstall the app:
+
+```powershell
+iex "& { $(iwr -useb https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.ps1) } uninstall"
+```
+
+Manual installer download:
+
 Download the latest Windows installer from GitHub Releases:
 
 ```text
@@ -53,6 +73,20 @@ After installation, start it from your app launcher or run:
 ```bash
 nes-emulator
 ```
+
+Check installation status:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.sh | sh -s -- status
+```
+
+Uninstall the Linux AppImage, launcher, command, and icon:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.sh | sh -s -- uninstall
+```
+
+The uninstall command keeps your games, saves, and settings in `~/.config/jonasgrimm.de/NES Emulator/`.
 
 Manual AppImage install:
 
