@@ -5,7 +5,7 @@ APP_NAME="NES Emulator"
 APP_ID="de.jonasgrimm.nesemulator"
 REPO="jonasgrimmde/NES-Emulator"
 APPIMAGE_URL="https://github.com/${REPO}/releases/latest/download/NES-Emulator-Linux.AppImage"
-ICON_URL="https://raw.githubusercontent.com/${REPO}/main/build/icons/app.png"
+ICON_URL="https://raw.githubusercontent.com/${REPO}/refs/heads/main/build/icons/app.png"
 
 INSTALL_DIR="${XDG_DATA_HOME:-"$HOME/.local/share"}/nes-emulator"
 BIN_DIR="$HOME/.local/bin"

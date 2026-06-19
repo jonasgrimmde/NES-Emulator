@@ -37,13 +37,13 @@ Run the installer and start `NES Emulator` from the Start menu or desktop shortc
 Use the install script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.sh | sh
 ```
 
 Alternative with `wget`:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/main/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.sh | sh
 ```
 
 The script downloads the latest AppImage from GitHub Releases, installs it into your user profile, creates a `nes-emulator` command, and adds a desktop launcher.
@@ -299,7 +299,7 @@ On Windows, the app downloads the installer into `Temp`, verifies hashes, starts
 On Linux, the app shows that an update is available and opens the latest GitHub Release. Linux users can update with the same install command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jonasgrimmde/NES-Emulator/refs/heads/main/install.sh | sh
 ```
 
 For the updater to work without embedding secrets, the release assets must be publicly downloadable.
