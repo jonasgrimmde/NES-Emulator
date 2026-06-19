@@ -5,7 +5,9 @@ const fs = require("fs");
 const path = require("path");
 const { createDiscordRpc } = require("./discord-rpc");
 
+const fsp = fs.promises;
 const externalGames = new Map();
+const romMetaCache = new Map();
 let discordRpc = null;
 let latestUpdate = null;
 const defaultSettings = {
@@ -146,6 +148,86 @@ function readRomMeta(filePath) {
       compatibility: "unknown",
     };
   }
+}
+
+async function readRomMetaAsync(filePath) {
+  let handle = null;
+  try {
+    handle = await fsp.open(filePath, "r");
+    const header = Buffer.alloc(16);
+    const { bytesRead } = await handle.read(header, 0, 16, 0);
+    if (bytesRead < 16 || header.toString("ascii", 0, 4) !== "NES\u001a") {
+      return {
+        validHeader: false,
+        label: "Invalid NES header",
+        compatibility: "bad-header",
+      };
+    }
+
+    const flags6 = header[6];
+    const flags7 = header[7];
+    const isNes2 = (flags7 & 0x0c) === 0x08;
+    const mapper = (flags6 >> 4) | (flags7 & 0xf0) | (isNes2 ? ((header[8] & 0x0f) << 8) : 0);
+    const region = header[9] & 1 ? "PAL" : "NTSC";
+    const supported = supportedMappers.has(mapper);
+    const mapperName = mapperNames[mapper] || `Mapper ${mapper}`;
+    return {
+      validHeader: true,
+      format: isNes2 ? "NES 2.0" : "iNES",
+      mapper,
+      mapperName,
+      mapperSupported: supported,
+      prgKb: header[4] * 16,
+      chrKb: header[5] * 8,
+      region,
+      trainer: Boolean(flags6 & 0x04),
+      label: `M${mapper} ${mapperName} - ${region}`,
+      compatibility: supported ? "supported" : "unsupported-mapper",
+    };
+  } catch (error) {
+    return {
+      validHeader: false,
+      label: "ROM info unavailable",
+      compatibility: "unknown",
+    };
+  } finally {
+    if (handle) {
+      await handle.close().catch(() => {});
+    }
+  }
+}
+
+function getCachedRomMeta(filePath, stats) {
+  const cached = romMetaCache.get(filePath);
+  if (!cached) {
+    return null;
+  }
+  if (stats && (cached.mtimeMs !== stats.mtimeMs || cached.size !== stats.size)) {
+    romMetaCache.delete(filePath);
+    return null;
+  }
+  return cached.meta;
+}
+
+function rememberRomMeta(filePath, stats, meta) {
+  romMetaCache.set(filePath, {
+    mtimeMs: stats ? stats.mtimeMs : 0,
+    size: stats ? stats.size : 0,
+    meta,
+  });
+  return meta;
+}
+
+async function readRomMetaCached(filePath) {
+  const stats = await fsp.stat(filePath);
+  if (!stats.isFile()) {
+    throw new Error("Selected entry is not a ROM file.");
+  }
+  const cached = getCachedRomMeta(filePath, stats);
+  if (cached) {
+    return cached;
+  }
+  return rememberRomMeta(filePath, stats, await readRomMetaAsync(filePath));
 }
 
 function getAppRootDir() {
@@ -581,10 +663,12 @@ function ensureSavesDir() {
   fs.mkdirSync(getSavesDir(), { recursive: true });
 }
 
-function gameFromFile(filePath, baseDir) {
+function gameFromFile(filePath, baseDir, options = {}) {
   const filename = path.basename(filePath);
   const relativePath = toRelativePath(baseDir, filePath);
   const folder = path.dirname(relativePath).split(path.sep).join("/");
+  const stats = options.stats || null;
+  const cachedMeta = getCachedRomMeta(filePath, stats);
   return {
     id: gameIdFromRelativePath(relativePath),
     title: titleFromName(filename),
@@ -592,7 +676,7 @@ function gameFromFile(filePath, baseDir) {
     relativePath,
     folder: folder === "." ? "" : folder,
     source: "library",
-    meta: readRomMeta(filePath),
+    meta: options.includeMeta === false ? cachedMeta : (cachedMeta || rememberRomMeta(filePath, stats, readRomMeta(filePath))),
   };
 }
 
@@ -604,24 +688,31 @@ function directoryFromEntry(dirPath, baseDir, name) {
   };
 }
 
-function listGameDirectory(relativeDir = "") {
+async function listGameDirectory(relativeDir = "") {
   ensureAppDirs();
   const gamesDir = getGamesDir();
   const currentPath = resolveInside(gamesDir, relativeDir);
-  if (!fs.existsSync(currentPath) || !fs.statSync(currentPath).isDirectory()) {
+  const currentStats = await fsp.stat(currentPath).catch(() => null);
+  if (!currentStats || !currentStats.isDirectory()) {
     throw new Error("Folder not found.");
   }
 
   const currentDir = toRelativePath(gamesDir, currentPath);
-  const entries = fs.readdirSync(currentPath, { withFileTypes: true })
+  const dirents = await fsp.readdir(currentPath, { withFileTypes: true });
+  const entries = (await Promise.all(dirents
     .filter((entry) => entry.isDirectory() || (entry.isFile() && entry.name.toLowerCase().endsWith(".nes")))
-    .map((entry) => {
+    .map(async (entry) => {
       const entryPath = path.join(currentPath, entry.name);
       if (entry.isDirectory()) {
         return directoryFromEntry(entryPath, gamesDir, entry.name);
       }
-      return Object.assign({ type: "game" }, gameFromFile(entryPath, gamesDir));
-    })
+      const stats = await fsp.stat(entryPath).catch(() => null);
+      if (!stats || !stats.isFile()) {
+        return null;
+      }
+      return Object.assign({ type: "game" }, gameFromFile(entryPath, gamesDir, { includeMeta: false, stats }));
+    })))
+    .filter(Boolean)
     .sort((a, b) => {
       if (a.type !== b.type) {
         return a.type === "folder" ? -1 : 1;
@@ -639,6 +730,18 @@ function listGameDirectory(relativeDir = "") {
   };
 }
 
+async function readLibraryRomMeta(relativePath) {
+  ensureAppDirs();
+  if (!relativePath) {
+    throw new Error("Entry not found.");
+  }
+  const entryPath = resolveInside(getGamesDir(), relativePath);
+  if (!entryPath.toLowerCase().endsWith(".nes")) {
+    throw new Error("Selected file is not a .nes ROM.");
+  }
+  return readRomMetaCached(entryPath);
+}
+
 function walkGames(dir, baseDir, games = []) {
   if (!fs.existsSync(dir)) {
     return games;
@@ -649,7 +752,7 @@ function walkGames(dir, baseDir, games = []) {
     if (entry.isDirectory()) {
       walkGames(entryPath, baseDir, games);
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".nes")) {
-      games.push(gameFromFile(entryPath, baseDir));
+      games.push(gameFromFile(entryPath, baseDir, { includeMeta: false }));
     }
   }
 
@@ -796,6 +899,7 @@ app.whenReady().then(() => {
   }
 
   ipcMain.handle("games:listDirectory", (_event, relativeDir) => listGameDirectory(relativeDir));
+  ipcMain.handle("games:readMeta", (_event, relativePath) => readLibraryRomMeta(relativePath));
   ipcMain.handle("games:list", () => listGames());
   ipcMain.handle("games:renameEntry", (_event, relativePath, newName) => renameLibraryEntry(relativePath, newName));
   ipcMain.handle("games:deleteEntry", (_event, relativePath) => deleteLibraryEntry(relativePath));
@@ -879,7 +983,7 @@ app.whenReady().then(() => {
     }
     return folderPath;
   });
-  ipcMain.handle("rom:read", (_event, id) => {
+  ipcMain.handle("rom:read", async (_event, id) => {
     const game = findGameById(id);
     if (!game) {
       throw new Error("Game not found.");
@@ -889,8 +993,8 @@ app.whenReady().then(() => {
     if (!romPath.toLowerCase().endsWith(".nes")) {
       throw new Error("Selected file is not a .nes ROM.");
     }
-    const bytes = fs.readFileSync(romPath);
-    return Array.from(bytes);
+    const bytes = await fsp.readFile(romPath);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   });
   ipcMain.handle("saves:read", (_event, gameId, slot) => {
     const savePath = getSavePath(gameId, slot);

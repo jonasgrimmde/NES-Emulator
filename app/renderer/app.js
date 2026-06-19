@@ -55,6 +55,9 @@ const selectedSlotPrefix = "nes-desktop-selected-save-slot-";
 const saveSlotCount = 4;
 const framesPerSecond = 60.098;
 const frameIntervalMs = 1000 / framesPerSecond;
+const maxFrameElapsedMs = 100;
+const gameListRenderBatchSize = 24;
+const romMetaHydrationBatchSize = 6;
 
 let currentFolder = "";
 let folderEntries = [];
@@ -85,6 +88,8 @@ let gameContextEntry = null;
 let focusedBrowserEntryKey = "";
 let renamingEntryKey = "";
 let renameCommitInProgress = false;
+let gameListRenderToken = 0;
+let metaHydrationToken = 0;
 
 const keybindButtons = [
   ["p1", "UP", "P1 Up"],
@@ -508,7 +513,7 @@ function setCapturedBinding(binding) {
 
 function getGameMetaLabel(game) {
   if (!game || !game.meta) {
-    return "ROM info unavailable";
+    return "Indexing ROM...";
   }
   return game.meta.label || "ROM info unavailable";
 }
@@ -531,6 +536,23 @@ function getCompatibilityStatus(game) {
 
 function shouldWarnBeforeOpening(game) {
   return Boolean(game && game.meta && game.meta.compatibility !== "supported");
+}
+
+async function ensureGameMeta(game) {
+  if (!game || game.type === "folder" || game.meta || game.source === "external" || !window.nesApp.readGameMeta) {
+    return game;
+  }
+  try {
+    game.meta = await window.nesApp.readGameMeta(game.relativePath);
+    rememberGame(game);
+    updateGameEntryMetaDom(game);
+  } catch (error) {
+    game.meta = {
+      label: "ROM info unavailable",
+      compatibility: "unknown",
+    };
+  }
+  return game;
 }
 
 function getCompatibilityWarningMessage(game) {
@@ -1179,7 +1201,8 @@ async function loadRom() {
   if (!currentGame) {
     throw new Error("No game selected.");
   }
-  return new Uint8Array(await window.nesApp.readRom(currentGame.id));
+  const bytes = await window.nesApp.readRom(currentGame.id);
+  return bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes);
 }
 
 async function createBrowser() {
@@ -1245,6 +1268,11 @@ function runFrameLoop(timestamp) {
   }
 
   const elapsed = timestamp - lastFrameTime;
+  if (elapsed > maxFrameElapsedMs) {
+    lastFrameTime = timestamp;
+    frameRequestId = window.requestAnimationFrame(runFrameLoop);
+    return;
+  }
   if (elapsed >= frameIntervalMs) {
     lastFrameTime = timestamp - (elapsed % frameIntervalMs);
     try {
@@ -1358,6 +1386,7 @@ async function selectGame(gameOrId, options = {}) {
   if (!game) {
     return false;
   }
+  await ensureGameMeta(game);
   if (selectedGame && selectedGame.id === game.id) {
     return true;
   }
@@ -1373,7 +1402,7 @@ async function selectGame(gameOrId, options = {}) {
   await refreshSaveMeta();
   const isLoaded = currentGame && currentGame.id === game.id && browser;
   setStatus(isLoaded ? getCompatibilityStatus(game) : `${game.title} selected. Press Start or double-click to load.`);
-  renderGameList();
+  updateSelectedGameListDom();
   renderSaveSlots();
   return true;
 }
@@ -1400,18 +1429,154 @@ async function loadSelectedGameForStart() {
   setRunControlsEnabled(false);
   gameTitleEl.textContent = game.title;
   await refreshSaveMeta();
-  renderGameList();
+  updateSelectedGameListDom();
   renderSaveSlots();
 }
 
+function createGameListItem(entry, state) {
+  const item = document.createElement("div");
+  const key = browserEntryKey(entry);
+  const isRenaming = renamingEntryKey === key;
+  item.tabIndex = 0;
+  item.setAttribute("role", "option");
+  item.dataset.entryKey = key;
+  item.classList.add("streaming-in");
+
+  if (entry.type === "folder") {
+    item.className = "game-item folder-entry streaming-in";
+    item.title = `Games / ${entry.relativePath}`;
+    if (isRenaming) {
+      item.classList.add("renaming");
+      item.innerHTML = `
+        <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-folder" aria-hidden="true"></i></span><input class="rename-input" type="text" value="${escapeHtml(entry.name)}" aria-label="Rename ${escapeHtml(entry.name)}"></div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-folder" aria-hidden="true"></i></span><span class="entry-text">${escapeHtml(entry.name)}</span></div>
+      `;
+    }
+    item.addEventListener("click", () => {
+      focusedBrowserEntryKey = key;
+      if (!isRenaming) {
+        loadGameDirectory(entry.relativePath);
+      }
+    });
+    item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
+  } else {
+    rememberGame(entry);
+    const isUnsupported = entry.meta && entry.meta.compatibility && entry.meta.compatibility !== "supported";
+    const isSelected = getSelectedGame() && getSelectedGame().id === entry.id;
+    item.className = "game-item file-entry streaming-in"
+      + (isSelected ? " active" : "")
+      + (isUnsupported ? " warning" : "");
+    item.setAttribute("aria-selected", isSelected ? "true" : "false");
+    item.title = entry.source === "external" ? entry.relativePath : `Games / ${entry.relativePath}`;
+    if (isRenaming) {
+      item.classList.add("renaming");
+      item.innerHTML = `
+        <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-gamepad" aria-hidden="true"></i></span><input class="rename-input" type="text" value="${escapeHtml(entry.filename)}" aria-label="Rename ${escapeHtml(entry.filename)}"></div>
+        <div class="game-meta">${escapeHtml(getGameMetaLabel(entry))}</div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-gamepad" aria-hidden="true"></i></span><span class="entry-text">${escapeHtml(entry.title)}</span></div>
+        <div class="game-meta">${escapeHtml(getGameMetaLabel(entry))}</div>
+      `;
+    }
+    item.addEventListener("click", () => {
+      focusedBrowserEntryKey = key;
+      if (!isRenaming) {
+        selectGame(entry);
+      }
+    });
+    item.addEventListener("dblclick", async () => {
+      if (isRenaming) {
+        return;
+      }
+      const selected = await selectGame(entry);
+      if (selected) {
+        await startSelectedGame();
+      }
+    });
+    item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
+  }
+  item.addEventListener("focus", () => {
+    focusedBrowserEntryKey = key;
+  });
+  item.addEventListener("keydown", async (event) => {
+    if (event.key === "Enter" && !isRenaming) {
+      event.preventDefault();
+      await openGameContextEntry(entry);
+    } else if (event.key === "F2" && !isRenaming) {
+      event.preventDefault();
+      beginInlineRename(entry);
+    }
+  });
+  if (isRenaming) {
+    state.renameInput = item.querySelector(".rename-input");
+    state.renameInput.addEventListener("click", (event) => event.stopPropagation());
+    state.renameInput.addEventListener("dblclick", (event) => event.stopPropagation());
+    state.renameInput.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitInlineRename(entry, state.renameInput);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelInlineRename();
+      }
+    });
+    state.renameInput.addEventListener("blur", () => {
+      commitInlineRename(entry, state.renameInput);
+    });
+  }
+  return item;
+}
+
+function updateGameEntryMetaDom(entry) {
+  const key = browserEntryKey(entry);
+  const item = Array.from(gameList.querySelectorAll("[data-entry-key]"))
+    .find((element) => element.dataset.entryKey === key);
+  if (!item) {
+    return;
+  }
+  const meta = item.querySelector(".game-meta");
+  if (meta) {
+    meta.textContent = getGameMetaLabel(entry);
+  }
+  item.classList.toggle("warning", Boolean(entry.meta && entry.meta.compatibility && entry.meta.compatibility !== "supported"));
+}
+
+function updateSelectedGameListDom() {
+  const selectedId = getSelectedGame() ? getSelectedGame().id : "";
+  for (const item of gameList.querySelectorAll(".file-entry[data-entry-key]")) {
+    const entry = findBrowserEntryByKey(item.dataset.entryKey);
+    const isSelected = Boolean(entry && entry.id === selectedId);
+    item.classList.toggle("active", isSelected);
+    item.setAttribute("aria-selected", isSelected ? "true" : "false");
+  }
+}
+
+async function hydrateRomMetaForEntries(entries, token) {
+  const games = entries.filter((entry) => entry.type === "game" && entry.source !== "external" && !entry.meta);
+  for (let index = 0; index < games.length && token === metaHydrationToken; index += romMetaHydrationBatchSize) {
+    const batch = games.slice(index, index + romMetaHydrationBatchSize);
+    await Promise.all(batch.map((entry) => ensureGameMeta(entry)));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+}
+
 function renderGameList() {
-  gameList.innerHTML = "";
+  gameListRenderToken += 1;
+  metaHydrationToken += 1;
+  const token = gameListRenderToken;
   const folders = folderEntries.filter((entry) => entry.type === "folder");
   const games = folderEntries.filter((entry) => entry.type === "game");
   gameCount.textContent = `${folders.length} dirs / ${games.length} games`;
   folderPathEl.textContent = currentFolder ? `Games / ${currentFolder}` : "Games";
   folderPathEl.title = folderPathEl.textContent;
   upFolderButton.disabled = !currentFolder;
+  gameList.innerHTML = "";
 
   const entries = getBrowserGames();
   if (entries.length === 0) {
@@ -1425,111 +1590,32 @@ function renderGameList() {
     return;
   }
 
-  let renameInput = null;
-  entries.forEach((entry) => {
-    const item = document.createElement("div");
-    const key = browserEntryKey(entry);
-    const isRenaming = renamingEntryKey === key;
-    item.tabIndex = 0;
-    item.setAttribute("role", "option");
-    item.dataset.entryKey = key;
-
-    if (entry.type === "folder") {
-      item.className = "game-item folder-entry";
-      item.title = `Games / ${entry.relativePath}`;
-      if (isRenaming) {
-        item.classList.add("renaming");
-        item.innerHTML = `
-          <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-folder" aria-hidden="true"></i></span><input class="rename-input" type="text" value="${escapeHtml(entry.name)}" aria-label="Rename ${escapeHtml(entry.name)}"></div>
-        `;
-      } else {
-        item.innerHTML = `
-          <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-folder" aria-hidden="true"></i></span><span class="entry-text">${escapeHtml(entry.name)}</span></div>
-        `;
-      }
-      item.addEventListener("click", () => {
-        focusedBrowserEntryKey = key;
-        if (!isRenaming) {
-          loadGameDirectory(entry.relativePath);
-        }
-      });
-      item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
-    } else {
-      rememberGame(entry);
-      const isUnsupported = entry.meta && entry.meta.compatibility && entry.meta.compatibility !== "supported";
-      const isSelected = getSelectedGame() && getSelectedGame().id === entry.id;
-      item.className = "game-item file-entry"
-        + (isSelected ? " active" : "")
-        + (isUnsupported ? " warning" : "");
-      item.setAttribute("aria-selected", isSelected ? "true" : "false");
-      item.title = entry.source === "external" ? entry.relativePath : `Games / ${entry.relativePath}`;
-      if (isRenaming) {
-        item.classList.add("renaming");
-        item.innerHTML = `
-          <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-gamepad" aria-hidden="true"></i></span><input class="rename-input" type="text" value="${escapeHtml(entry.filename)}" aria-label="Rename ${escapeHtml(entry.filename)}"></div>
-          <div class="game-meta">${escapeHtml(getGameMetaLabel(entry))}</div>
-        `;
-      } else {
-        item.innerHTML = `
-          <div class="game-name"><span class="entry-icon"><i class="fa-solid fa-gamepad" aria-hidden="true"></i></span><span class="entry-text">${escapeHtml(entry.title)}</span></div>
-          <div class="game-meta">${escapeHtml(getGameMetaLabel(entry))}</div>
-        `;
-      }
-      item.addEventListener("click", () => {
-        focusedBrowserEntryKey = key;
-        if (!isRenaming) {
-          selectGame(entry);
-        }
-      });
-      item.addEventListener("dblclick", async () => {
-        if (isRenaming) {
-          return;
-        }
-        const selected = await selectGame(entry);
-        if (selected) {
-          await startSelectedGame();
-        }
-      });
-      item.addEventListener("contextmenu", (event) => showGameContextMenu(event, entry));
+  const state = { renameInput: null };
+  let index = 0;
+  function appendBatch() {
+    if (token !== gameListRenderToken) {
+      return;
     }
-    item.addEventListener("focus", () => {
-      focusedBrowserEntryKey = key;
-    });
-    item.addEventListener("keydown", async (event) => {
-      if (event.key === "Enter" && !isRenaming) {
-        event.preventDefault();
-        await openGameContextEntry(entry);
-      } else if (event.key === "F2" && !isRenaming) {
-        event.preventDefault();
-        beginInlineRename(entry);
-      }
-    });
-    if (isRenaming) {
-      renameInput = item.querySelector(".rename-input");
-      renameInput.addEventListener("click", (event) => event.stopPropagation());
-      renameInput.addEventListener("dblclick", (event) => event.stopPropagation());
-      renameInput.addEventListener("keydown", (event) => {
-        event.stopPropagation();
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitInlineRename(entry, renameInput);
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          cancelInlineRename();
-        }
-      });
-      renameInput.addEventListener("blur", () => {
-        commitInlineRename(entry, renameInput);
+    const fragment = document.createDocumentFragment();
+    const end = Math.min(index + gameListRenderBatchSize, entries.length);
+    while (index < end) {
+      fragment.append(createGameListItem(entries[index], state));
+      index += 1;
+    }
+    gameList.append(fragment);
+    if (index < entries.length) {
+      requestAnimationFrame(appendBatch);
+      return;
+    }
+    if (state.renameInput) {
+      requestAnimationFrame(() => {
+        state.renameInput.focus();
+        state.renameInput.select();
       });
     }
-    gameList.append(item);
-  });
-  if (renameInput) {
-    requestAnimationFrame(() => {
-      renameInput.focus();
-      renameInput.select();
-    });
+    hydrateRomMetaForEntries(entries, metaHydrationToken);
   }
+  requestAnimationFrame(appendBatch);
 }
 
 async function loadGameDirectory(relativeDir = currentFolder) {
