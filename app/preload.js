@@ -3,6 +3,11 @@ const { clipboard, contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("nesApp", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   controlWindow: (action) => ipcRenderer.invoke("window:control", action),
+  onWindowState: (callback) => {
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on("window:state", listener);
+    return () => ipcRenderer.removeListener("window:state", listener);
+  },
   openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
   copyText: (text) => clipboard.writeText(String(text || "")),
   listGameDirectory: (relativeDir) => ipcRenderer.invoke("games:listDirectory", relativeDir),

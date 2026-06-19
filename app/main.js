@@ -1019,6 +1019,21 @@ function createWindow() {
     mainWindow = null;
   });
 
+  const sendWindowState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("window:state", {
+        isMaximized: mainWindow.isMaximized(),
+      });
+    }
+  };
+
+  mainWindow.on("maximize", sendWindowState);
+  mainWindow.on("unmaximize", sendWindowState);
+  mainWindow.on("restore", sendWindowState);
+  mainWindow.on("enter-full-screen", sendWindowState);
+  mainWindow.on("leave-full-screen", sendWindowState);
+  mainWindow.webContents.on("did-finish-load", sendWindowState);
+
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 

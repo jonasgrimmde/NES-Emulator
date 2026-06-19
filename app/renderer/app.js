@@ -2777,6 +2777,12 @@ titlebar.addEventListener("dblclick", (event) => {
   }
 });
 
+if (window.nesApp && window.nesApp.onWindowState) {
+  window.nesApp.onWindowState((state) => {
+    setWindowMaximizedState(Boolean(state && state.isMaximized));
+  });
+}
+
 saveButton.addEventListener("click", () => {
   saveToSlot(getSelectedSlot());
 });
