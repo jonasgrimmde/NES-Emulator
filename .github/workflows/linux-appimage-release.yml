@@ -15,6 +15,7 @@ jobs:
   appimage:
     name: Build and upload AppImage
     runs-on: ubuntu-22.04
+    environment: Release
 
     steps:
       - name: Checkout
