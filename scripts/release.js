@@ -479,14 +479,18 @@ async function deleteUnexpectedReleaseAssets(token, release, uploadAssetNames) {
   }
 }
 
-async function verifyReleaseAssetSet(token, owner, repo, tag, expectedAssetNames) {
+async function verifyReleaseAssetSet(token, owner, repo, tag, expectedAssetNames, optionalAssetNames = []) {
   const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
   const release = await githubRequest(
     token,
     `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
   );
   const expected = [...expectedAssetNames].sort();
-  const actual = (release.assets || []).map((entry) => entry.name).sort();
+  const optional = new Set(optionalAssetNames);
+  const actual = (release.assets || [])
+    .map((entry) => entry.name)
+    .filter((name) => !optional.has(name))
+    .sort();
   const matches =
     expected.length === actual.length &&
     expected.every((name, index) => name === actual[index]);
@@ -504,6 +508,31 @@ async function getReleaseByTag(token, owner, repo, tag) {
     token,
     `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
   );
+}
+
+async function getRepositoryDefaultBranch(token, owner, repo) {
+  const data = await githubRequest(token, `https://api.github.com/repos/${owner}/${repo}`);
+  return data && data.default_branch ? data.default_branch : "main";
+}
+
+async function triggerLinuxReleaseWorkflow(token, owner, repo, version) {
+  const ref = process.env.GITHUB_REF_NAME || await getRepositoryDefaultBranch(token, owner, repo);
+  const workflowId = "linux-appimage-release.yml";
+  logStep(`Trigger Linux AppImage workflow on ${ref}`);
+  await githubRequest(
+    token,
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ref,
+        inputs: {
+          version,
+        },
+      }),
+    },
+  );
+  logSuccess("Linux AppImage workflow triggered");
 }
 
 async function fetchReleaseAssetText(token, release, assetName) {
@@ -750,6 +779,11 @@ async function releaseLinuxAppImage({ token, owner, repo, version }) {
   logInfo("Repository", `${owner}/${repo}`);
   logInfo("Version", version);
 
+  logHeader("Prepare files");
+  logStep("Set package version for Linux build");
+  updatePackageVersion(version);
+  logSuccess(`package.json/package-lock.json set to ${version}`);
+
   logHeader("Build");
   run("npm", ["run", "pack:linux"]);
   const appImageUploadPath = createAppImageUploadCopy(findAppImage());
@@ -921,7 +955,15 @@ async function main() {
       manifest.manifestPath,
       "application/x-yaml",
     );
-    await verifyReleaseAssetSet(token, owner, repo, manifest.tag, uploadAssetNames);
+    await verifyReleaseAssetSet(token, owner, repo, manifest.tag, uploadAssetNames, [
+      "NES-Emulator-Linux.AppImage",
+    ]);
+    try {
+      await triggerLinuxReleaseWorkflow(token, owner, repo, nextVersion);
+    } catch (workflowError) {
+      console.error(`${color("yellow", "WARN")} Linux workflow trigger failed: ${workflowError.message || workflowError}`);
+      console.error(`${color("yellow", "WARN")} Run the "Linux AppImage Release" workflow manually for ${nextVersion}.`);
+    }
 
     commitVersionFiles(nextVersion);
     versionFilesCommitted = true;
