@@ -8,6 +8,7 @@ const { createDiscordRpc } = require("./discord-rpc");
 const fsp = fs.promises;
 const externalGames = new Map();
 const romMetaCache = new Map();
+let mainWindow = null;
 let discordRpc = null;
 let latestUpdate = null;
 const defaultSettings = {
@@ -992,7 +993,7 @@ function externalGameFromPath(filePath) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1180,
     height: 760,
     minWidth: 860,
@@ -1009,11 +1010,31 @@ function createWindow() {
     },
   });
 
-  win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
 app.setPath("userData", path.join(getAppRootDir(), "User Data"));
 
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) {
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  });
+}
+
+if (singleInstanceLock) {
 app.whenReady().then(() => {
   ensureAppDirs();
   loadLocalEnv();
@@ -1205,6 +1226,7 @@ app.whenReady().then(() => {
     }
   });
 });
+}
 
 app.on("before-quit", () => {
   if (discordRpc) {

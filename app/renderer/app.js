@@ -332,9 +332,7 @@ function refreshSettingsReverts() {
   });
   attach(crtToggle.closest(".settings-toggle"), !valuesEqual(Boolean(draftSettings.crt.enabled), Boolean(getBaselineCrtSettings().enabled)), "CRT Shader", () => {
     draftSettings.crt.enabled = Boolean(getBaselineCrtSettings().enabled);
-    settings.crt = draftSettings.crt;
     crtToggle.checked = draftSettings.crt.enabled;
-    applyCrtSettings();
     refreshSettingsSaveState();
     refreshSettingsReverts();
   });
@@ -450,6 +448,14 @@ function getCrtSettings() {
   return settings.crt;
 }
 
+function getEditableCrtSettings() {
+  if (draftSettings) {
+    draftSettings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, draftSettings.crt || {});
+    return draftSettings.crt;
+  }
+  return getCrtSettings();
+}
+
 function getNesSourceCanvas() {
   return document.querySelector("#nes canvas:not(.crt-output)");
 }
@@ -510,7 +516,7 @@ function renderCrtPreview() {
     crtPreviewFilter.canvas.classList.add("crt-preview-output");
   }
   if (crtPreviewFilter) {
-    crtPreviewFilter.setParams(getCrtSettings());
+    crtPreviewFilter.setParams(getEditableCrtSettings());
     crtPreviewFilter.setEnabled(true);
     crtPreviewFilter.render(crtPreview);
   }
@@ -679,7 +685,7 @@ const crtFields = [
 ];
 
 function renderCrtControls() {
-  const crt = getCrtSettings();
+  const crt = getEditableCrtSettings();
   const baselineCrt = getBaselineCrtSettings();
   crtControls.innerHTML = "";
   for (const [key, label, min, max, step] of crtFields) {
@@ -689,25 +695,19 @@ function renderCrtControls() {
     const input = row.querySelector("input");
     const output = row.querySelector("output");
     const revert = createSettingRevertButton(!valuesEqual(Number(crt[key]), Number(baselineCrt[key])), label, () => {
-      settings.crt[key] = baselineCrt[key];
-      if (draftSettings) {
-        draftSettings.crt = settings.crt;
-      }
-      input.value = String(settings.crt[key]);
-      output.value = String(settings.crt[key]);
+      const editableCrt = getEditableCrtSettings();
+      editableCrt[key] = baselineCrt[key];
+      input.value = String(editableCrt[key]);
+      output.value = String(editableCrt[key]);
       revert.hidden = true;
-      applyCrtSettings();
       renderCrtPreview();
       refreshSettingsSaveState();
     });
     input.addEventListener("input", () => {
-      settings.crt[key] = Number(input.value);
-      if (draftSettings) {
-        draftSettings.crt = settings.crt;
-      }
+      const editableCrt = getEditableCrtSettings();
+      editableCrt[key] = Number(input.value);
       output.value = input.value;
-      revert.hidden = valuesEqual(Number(settings.crt[key]), Number(baselineCrt[key]));
-      applyCrtSettings();
+      revert.hidden = valuesEqual(Number(editableCrt[key]), Number(baselineCrt[key]));
       renderCrtPreview();
       refreshSettingsSaveState();
     });
@@ -2535,12 +2535,11 @@ resolutionSelect.addEventListener("change", () => {
 });
 
 crtToggle.addEventListener("change", () => {
-  settings.crt = getCrtSettings();
-  settings.crt.enabled = crtToggle.checked;
-  if (draftSettings) {
-    draftSettings.crt = settings.crt;
+  const editableCrt = getEditableCrtSettings();
+  editableCrt.enabled = crtToggle.checked;
+  if (!draftSettings) {
+    applyCrtSettings();
   }
-  applyCrtSettings();
   refreshSettingsSaveState();
   refreshSettingsReverts();
 });
@@ -2556,13 +2555,16 @@ crtClose.addEventListener("click", () => {
 });
 
 crtReset.addEventListener("click", () => {
-  const wasEnabled = Boolean(getCrtSettings().enabled);
-  settings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, { enabled: wasEnabled });
+  const editableCrt = getEditableCrtSettings();
+  const wasEnabled = Boolean(editableCrt.enabled);
+  const resetCrt = Object.assign({}, window.CRT_DEFAULTS || {}, { enabled: wasEnabled });
   if (draftSettings) {
-    draftSettings.crt = settings.crt;
+    draftSettings.crt = resetCrt;
+  } else {
+    settings.crt = resetCrt;
+    applyCrtSettings();
   }
   renderCrtControls();
-  applyCrtSettings();
   renderCrtPreview();
   refreshSettingsSaveState();
 });
