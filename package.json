@@ -1,6 +1,6 @@
 {
   "name": "nes-emulator-desktop",
-  "version": "26.4.2",
+  "version": "26.5.0",
   "description": "Local NES emulator desktop app.",
   "author": "NES Emulator",
   "main": "app/main.js",
