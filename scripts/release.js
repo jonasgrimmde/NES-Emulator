@@ -86,6 +86,18 @@ function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
+function readTextIfExists(filePath) {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
+}
+
+function restoreTextFile(filePath, content) {
+  if (content === null) {
+    fs.rmSync(filePath, { force: true });
+    return;
+  }
+  fs.writeFileSync(filePath, content, "utf8");
+}
+
 function commandForSpawn(command) {
   if (process.platform !== "win32") return command;
   if (command === "npm" || command === "npx") {
@@ -126,6 +138,17 @@ function runStatus(command, args, options = {}) {
     shell: false,
     env: Object.assign({}, process.env, options.env || {}),
   });
+}
+
+function isInsideGitRepo() {
+  return runStatus("git", ["rev-parse", "--is-inside-work-tree"]).status === 0;
+}
+
+function resetVersionFilesFromGitIndex() {
+  if (!isInsideGitRepo()) {
+    return;
+  }
+  runStatus("git", ["reset", "--", "package.json", "package-lock.json"]);
 }
 
 function parseArgs() {
@@ -301,17 +324,18 @@ async function getOrCreateRelease({
 }) {
   const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
   try {
-    return await githubRequest(
+    const release = await githubRequest(
       token,
       `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
     );
+    return { release, created: false };
   } catch (error) {
     if (error.status !== 404) {
       throw error;
     }
   }
 
-  return githubRequest(token, `${apiBase}/releases`, {
+  const release = await githubRequest(token, `${apiBase}/releases`, {
     method: "POST",
     body: JSON.stringify({
       tag_name: tag,
@@ -321,6 +345,25 @@ async function getOrCreateRelease({
       prerelease,
     }),
   });
+  return { release, created: true };
+}
+
+async function deleteReleaseAndTag(token, owner, repo, release, tag) {
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
+  if (release && release.url) {
+    logStep(`Rollback GitHub release ${tag}`);
+    await githubRequest(token, release.url, { method: "DELETE" });
+    logSuccess(`Deleted release ${tag}`);
+  }
+  try {
+    logStep(`Rollback Git tag ${tag}`);
+    await githubRequest(token, `${apiBase}/git/refs/tags/${encodeURIComponent(tag)}`, { method: "DELETE" });
+    logSuccess(`Deleted tag ${tag}`);
+  } catch (error) {
+    if (error.status !== 404) {
+      throw error;
+    }
+  }
 }
 
 async function deleteExistingAsset(token, release, assetName) {
@@ -349,6 +392,25 @@ async function deleteUnexpectedReleaseAssets(token, release, uploadAssetNames) {
   }
 }
 
+async function verifyReleaseAssetSet(token, owner, repo, tag, expectedAssetNames) {
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}`;
+  const release = await githubRequest(
+    token,
+    `${apiBase}/releases/tags/${encodeURIComponent(tag)}`,
+  );
+  const expected = [...expectedAssetNames].sort();
+  const actual = (release.assets || []).map((entry) => entry.name).sort();
+  const matches =
+    expected.length === actual.length &&
+    expected.every((name, index) => name === actual[index]);
+  if (!matches) {
+    throw new Error(
+      `Release asset check failed. Expected ${expected.join(", ")}; found ${actual.join(", ") || "none"}.`,
+    );
+  }
+  logSuccess(`Release assets verified: ${expected.join(", ")}`);
+}
+
 async function uploadAsset(token, release, filePath, contentType) {
   const assetName = path.basename(filePath);
   await deleteExistingAsset(token, release, assetName);
@@ -374,8 +436,7 @@ async function uploadAsset(token, release, filePath, contentType) {
 
 function commitVersionFiles(version) {
   logHeader("Git commit");
-  const insideGit = runStatus("git", ["rev-parse", "--is-inside-work-tree"]);
-  if (insideGit.status !== 0) {
+  if (!isInsideGitRepo()) {
     logStep("Skip commit because this folder is not a Git repository.");
     return;
   }
@@ -439,6 +500,20 @@ function commitVersionFiles(version) {
     throw new Error(`Git commit failed.${details ? ` ${details}` : ""}`);
   }
   logSuccess(`Committed version files for ${version}`);
+}
+
+function precheckVersionCommit() {
+  logHeader("Git precheck");
+  if (!isInsideGitRepo()) {
+    logStep("Skip Git commit precheck because this folder is not a Git repository.");
+    return;
+  }
+  const name = runCapture("git", ["config", "--get", "user.name"]);
+  const email = runCapture("git", ["config", "--get", "user.email"]);
+  if (!name || !email) {
+    throw new Error("Git user.name/user.email is missing; configure Git before releasing.");
+  }
+  logSuccess("Git can commit version files");
 }
 
 function uploadAssetWithProgress({
@@ -522,117 +597,154 @@ function uploadAssetWithProgress({
 
 async function main() {
   const releaseStartedAt = Date.now();
+  const originalPackageJson = readTextIfExists(packagePath);
+  const originalPackageLock = readTextIfExists(lockPath);
+  let versionFilesCommitted = false;
+  let createdRelease = null;
+  let createdReleaseTag = "";
+  let token = "";
+  let owner = "";
+  let repo = "";
+
   logHeader("NES Emulator release");
-  const options = parseArgs();
-  const pkgBefore = readJson(packagePath);
-  const owner =
-    process.env.GITHUB_OWNER || (pkgBefore.release && pkgBefore.release.owner);
-  const repo =
-    process.env.GITHUB_REPO || (pkgBefore.release && pkgBefore.release.repo);
-  if (!owner || !repo) {
-    throw new Error("Missing release.owner/release.repo in package.json.");
-  }
+  try {
+    const options = parseArgs();
+    const pkgBefore = readJson(packagePath);
+    owner =
+      process.env.GITHUB_OWNER || (pkgBefore.release && pkgBefore.release.owner);
+    repo =
+      process.env.GITHUB_REPO || (pkgBefore.release && pkgBefore.release.repo);
+    if (!owner || !repo) {
+      throw new Error("Missing release.owner/release.repo in package.json.");
+    }
 
-  const nextVersion =
-    options.version || bumpVersion(pkgBefore.version, options.bump);
-  logInfo("Repository", `${owner}/${repo}`);
-  logInfo("Version", `${pkgBefore.version} -> ${nextVersion}`);
-  logInfo(
-    "Mode",
-    `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`,
-  );
-
-  logHeader("Preflight");
-  run("npm", ["run", "preflight"]);
-  logStep("Resolve GitHub token");
-  const token = getGitHubToken();
-  if (!token) {
-    throw new Error(
-      "GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.",
+    const nextVersion =
+      options.version || bumpVersion(pkgBefore.version, options.bump);
+    logInfo("Repository", `${owner}/${repo}`);
+    logInfo("Version", `${pkgBefore.version} -> ${nextVersion}`);
+    logInfo(
+      "Mode",
+      `${options.draft ? "draft" : "published"}${options.prerelease ? ", prerelease" : ""}`,
     );
+
+    logHeader("Preflight");
+    run("npm", ["run", "preflight"]);
+    logStep("Resolve GitHub token");
+    token = getGitHubToken();
+    if (!token) {
+      throw new Error(
+        "GitHub auth missing. Run `gh auth login` once, or set GH_TOKEN/GITHUB_TOKEN.",
+      );
+    }
+    logSuccess("GitHub auth available");
+    precheckVersionCommit();
+
+    logHeader("Prepare files");
+    logStep("Update package version");
+    updatePackageVersion(nextVersion);
+    logSuccess(`package.json/package-lock.json set to ${nextVersion}`);
+    const pkg = readJson(packagePath);
+
+    logHeader("Build");
+    run("npm", ["run", "clean"]);
+    run("npm", ["run", "pack"]);
+    run("npm", ["run", "setup"]);
+
+    const setupPath = path.join(
+      rootDir,
+      "dist",
+      "installer",
+      `NES-Emulator-Setup-${nextVersion}.exe`,
+    );
+    if (!fs.existsSync(setupPath)) {
+      throw new Error(`Setup file not found: ${setupPath}`);
+    }
+    logInfo(
+      "Setup",
+      `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`,
+    );
+
+    const setupUploadPath = createInstallerUploadCopy(setupPath);
+
+    logHeader("Manifest");
+    const manifest = createLatestManifest({
+      pkg,
+      setupPath: setupUploadPath,
+      version: nextVersion,
+      owner,
+      repo,
+    });
+    logSuccess(`Created ${path.relative(rootDir, manifest.manifestPath)}`);
+    logInfo("SHA256", manifest.sha256);
+
+    logHeader("GitHub");
+    logStep(`Create or reuse release ${manifest.tag}`);
+    const releaseResult = await getOrCreateRelease({
+      token,
+      owner,
+      repo,
+      tag: manifest.tag,
+      version: nextVersion,
+      draft: options.draft,
+      prerelease: options.prerelease,
+    });
+    const release = releaseResult.release;
+    if (releaseResult.created) {
+      createdRelease = release;
+      createdReleaseTag = manifest.tag;
+    }
+    logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
+
+    const uploadAssetNames = [
+      path.basename(setupUploadPath),
+      path.basename(manifest.manifestPath),
+    ];
+    await deleteUnexpectedReleaseAssets(token, release, uploadAssetNames);
+
+    await uploadAsset(
+      token,
+      release,
+      setupUploadPath,
+      "application/vnd.microsoft.portable-executable",
+    );
+    await uploadAsset(
+      token,
+      release,
+      manifest.manifestPath,
+      "application/x-yaml",
+    );
+    await verifyReleaseAssetSet(token, owner, repo, manifest.tag, uploadAssetNames);
+
+    commitVersionFiles(nextVersion);
+    versionFilesCommitted = true;
+
+    logHeader("Done");
+    console.log("");
+    logSuccess(
+      `Released NES Emulator ${nextVersion} in ${formatDuration(releaseStartedAt)}`,
+    );
+    logInfo("Tag", manifest.tag);
+    logInfo("Setup", manifest.setupName);
+    logInfo("SHA256", manifest.sha256);
+  } catch (error) {
+    logHeader("Rollback");
+    if (!versionFilesCommitted) {
+      restoreTextFile(packagePath, originalPackageJson);
+      restoreTextFile(lockPath, originalPackageLock);
+      resetVersionFilesFromGitIndex();
+      logSuccess("Restored package.json/package-lock.json");
+    } else {
+      logStep("Version files were already committed; local version rollback skipped.");
+    }
+    if (createdRelease && token && owner && repo) {
+      try {
+        await deleteReleaseAndTag(token, owner, repo, createdRelease, createdReleaseTag);
+      } catch (rollbackError) {
+        console.error(`${color("yellow", "WARN")} GitHub rollback failed: ${rollbackError.message || rollbackError}`);
+      }
+    }
+    throw error;
   }
-  logSuccess("GitHub auth available");
-
-  logHeader("Prepare files");
-  logStep("Update package version");
-  updatePackageVersion(nextVersion);
-  logSuccess(`package.json/package-lock.json set to ${nextVersion}`);
-  const pkg = readJson(packagePath);
-
-  logHeader("Build");
-  run("npm", ["run", "clean"]);
-  run("npm", ["run", "pack"]);
-  run("npm", ["run", "setup"]);
-
-  const setupPath = path.join(
-    rootDir,
-    "dist",
-    "installer",
-    `NES-Emulator-Setup-${nextVersion}.exe`,
-  );
-  if (!fs.existsSync(setupPath)) {
-    throw new Error(`Setup file not found: ${setupPath}`);
-  }
-  logInfo(
-    "Setup",
-    `${path.relative(rootDir, setupPath)} (${formatBytes(fs.statSync(setupPath).size)})`,
-  );
-
-  const setupUploadPath = createInstallerUploadCopy(setupPath);
-
-  logHeader("Manifest");
-  const manifest = createLatestManifest({
-    pkg,
-    setupPath: setupUploadPath,
-    version: nextVersion,
-    owner,
-    repo,
-  });
-  logSuccess(`Created ${path.relative(rootDir, manifest.manifestPath)}`);
-  logInfo("SHA256", manifest.sha256);
-
-  logHeader("GitHub");
-  logStep(`Create or reuse release ${manifest.tag}`);
-  const release = await getOrCreateRelease({
-    token,
-    owner,
-    repo,
-    tag: manifest.tag,
-    version: nextVersion,
-    draft: options.draft,
-    prerelease: options.prerelease,
-  });
-  logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
-
-  const uploadAssetNames = [
-    path.basename(setupUploadPath),
-    path.basename(manifest.manifestPath),
-  ];
-  await deleteUnexpectedReleaseAssets(token, release, uploadAssetNames);
-
-  await uploadAsset(
-    token,
-    release,
-    setupUploadPath,
-    "application/vnd.microsoft.portable-executable",
-  );
-  await uploadAsset(
-    token,
-    release,
-    manifest.manifestPath,
-    "application/x-yaml",
-  );
-
-  commitVersionFiles(nextVersion);
-
-  logHeader("Done");
-  console.log("");
-  logSuccess(
-    `Released NES Emulator ${nextVersion} in ${formatDuration(releaseStartedAt)}`,
-  );
-  logInfo("Tag", manifest.tag);
-  logInfo("Setup", manifest.setupName);
-  logInfo("SHA256", manifest.sha256);
 }
 
 main().catch((error) => {
