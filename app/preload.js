@@ -2,6 +2,7 @@ const { clipboard, contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("nesApp", {
   getAppVersion: () => ipcRenderer.invoke("app:version"),
+  controlWindow: (action) => ipcRenderer.invoke("window:control", action),
   openExternal: (url) => ipcRenderer.invoke("app:openExternal", url),
   copyText: (text) => clipboard.writeText(String(text || "")),
   listGameDirectory: (relativeDir) => ipcRenderer.invoke("games:listDirectory", relativeDir),

@@ -1,5 +1,10 @@
 const statusEl = document.getElementById("status");
 const gameTitleEl = document.getElementById("gameTitle");
+const titlebar = document.getElementById("titlebar");
+const titlebarVersion = document.getElementById("titlebarVersion");
+const windowMinimize = document.getElementById("windowMinimize");
+const windowMaximize = document.getElementById("windowMaximize");
+const windowClose = document.getElementById("windowClose");
 const gameList = document.getElementById("gameList");
 const gameCount = document.getElementById("gameCount");
 const folderPathEl = document.getElementById("folderPath");
@@ -151,6 +156,29 @@ function setButtonLabel(button, text) {
     label.textContent = text;
   } else {
     button.textContent = text;
+  }
+}
+
+function setWindowMaximizedState(isMaximized) {
+  if (!windowMaximize) {
+    return;
+  }
+  windowMaximize.title = isMaximized ? "Restore" : "Maximize";
+  windowMaximize.setAttribute("aria-label", windowMaximize.title);
+  windowMaximize.innerHTML = isMaximized
+    ? `<i class="fa-regular fa-window-restore" aria-hidden="true"></i>`
+    : `<i class="fa-regular fa-square" aria-hidden="true"></i>`;
+}
+
+async function controlWindow(action) {
+  if (!window.nesApp || !window.nesApp.controlWindow) {
+    return;
+  }
+  try {
+    const isMaximized = await window.nesApp.controlWindow(action);
+    setWindowMaximizedState(Boolean(isMaximized));
+  } catch (error) {
+    setStatus(error.message || String(error));
   }
 }
 
@@ -2731,6 +2759,24 @@ footerCreditLink.addEventListener("click", async (event) => {
   }
 });
 
+windowMinimize.addEventListener("click", () => {
+  controlWindow("minimize");
+});
+
+windowMaximize.addEventListener("click", () => {
+  controlWindow("maximize");
+});
+
+windowClose.addEventListener("click", () => {
+  controlWindow("close");
+});
+
+titlebar.addEventListener("dblclick", (event) => {
+  if (!event.target.closest(".titlebar-control")) {
+    controlWindow("maximize");
+  }
+});
+
 saveButton.addEventListener("click", () => {
   saveToSlot(getSelectedSlot());
 });
@@ -2825,8 +2871,10 @@ async function init() {
   try {
     const version = await window.nesApp.getAppVersion();
     document.title = `NES Emulator (${version})`;
+    titlebarVersion.textContent = version;
   } catch (error) {
     document.title = "NES Emulator";
+    titlebarVersion.textContent = "";
   }
   try {
     const result = await window.nesApp.readSettings();

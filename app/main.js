@@ -1005,6 +1005,7 @@ function createWindow() {
     title: getWindowTitle(),
     icon: getWindowIconPath(),
     backgroundColor: "#090909",
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -1065,6 +1066,24 @@ app.whenReady().then(() => {
   ipcMain.handle("settings:reset", () => resetSettings());
   ipcMain.handle("settings:defaults", () => getDefaultSettings());
   ipcMain.handle("app:version", () => getDisplayVersion());
+  ipcMain.handle("window:control", (event, action) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) {
+      return false;
+    }
+    if (action === "minimize") {
+      window.minimize();
+    } else if (action === "maximize") {
+      if (window.isMaximized()) {
+        window.unmaximize();
+      } else {
+        window.maximize();
+      }
+    } else if (action === "close") {
+      window.close();
+    }
+    return window.isMaximized();
+  });
   ipcMain.handle("discord:status", () => discordRpc ? discordRpc.getStatus() : { configured: false, enabled: false, connected: false });
   ipcMain.handle("discord:setIdle", () => {
     if (discordRpc) {

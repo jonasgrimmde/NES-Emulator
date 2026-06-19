@@ -68,6 +68,92 @@ body {
   font-family: var(--ui-font);
 }
 
+.titlebar {
+  height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  background: rgba(12, 15, 19, 0.96);
+  border-bottom: 1px solid #202630;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+  -webkit-app-region: drag;
+}
+
+.titlebar-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+}
+
+.titlebar-mark {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 4px;
+  font-family: var(--mono-font);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.titlebar-name {
+  min-width: 0;
+  overflow: hidden;
+  color: #d9dee5;
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-version {
+  flex: 0 0 auto;
+  color: var(--subtle);
+  font-family: var(--mono-font);
+  font-size: 11px;
+}
+
+.titlebar-controls {
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 46px);
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-control {
+  width: 46px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #c8d0da;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.titlebar-control:hover,
+.titlebar-control:focus-visible {
+  color: #fff;
+  background: #202630;
+  outline: none;
+}
+
+.titlebar-control .fa-solid,
+.titlebar-control .fa-regular {
+  font-size: 12px;
+}
+
+.titlebar-close:hover,
+.titlebar-close:focus-visible {
+  background: #c42f36;
+}
+
 button,
 select,
 input {
@@ -76,7 +162,7 @@ input {
 
 main {
   width: min(1800px, calc(100vw - 32px));
-  height: 100vh;
+  height: calc(100vh - 38px);
   margin: 0 auto;
   padding: 14px 0 10px;
   display: grid;
@@ -1268,7 +1354,7 @@ input[type="range"] {
   main {
     width: min(100% - 24px, 860px);
     height: auto;
-    min-height: 100vh;
+    min-height: calc(100vh - 38px);
   }
 
   .header-center {

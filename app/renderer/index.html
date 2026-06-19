@@ -8,6 +8,24 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
+    <div class="titlebar" id="titlebar">
+      <div class="titlebar-brand" aria-hidden="true">
+        <span class="titlebar-mark">NES</span>
+        <span class="titlebar-name">NES Emulator</span>
+        <span id="titlebarVersion" class="titlebar-version">dev</span>
+      </div>
+      <div class="titlebar-controls">
+        <button id="windowMinimize" class="titlebar-control" type="button" title="Minimize" aria-label="Minimize">
+          <i class="fa-solid fa-minus" aria-hidden="true"></i>
+        </button>
+        <button id="windowMaximize" class="titlebar-control" type="button" title="Maximize" aria-label="Maximize">
+          <i class="fa-regular fa-square" aria-hidden="true"></i>
+        </button>
+        <button id="windowClose" class="titlebar-control titlebar-close" type="button" title="Close" aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
     <main>
       <header>
         <div class="header-center">
