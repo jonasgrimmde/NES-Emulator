@@ -178,6 +178,14 @@
                 <option value="4x">4x native</option>
               </select>
             </label>
+            <div class="settings-command">
+              <span>CRT Shader</span>
+              <button id="crtToggle" class="btn" type="button"><i class="fa-solid fa-tv" aria-hidden="true"></i><span>CRT Shader OFF</span></button>
+            </div>
+            <div class="settings-command">
+              <span>Shader tuning</span>
+              <button id="crtCustomize" class="btn" type="button"><i class="fa-solid fa-sliders" aria-hidden="true"></i><span>Customize CRT Shader</span></button>
+            </div>
           </section>
 
           <section class="settings-section">
@@ -222,6 +230,19 @@
       </section>
     </div>
 
+    <div id="crtModal" class="modal-backdrop" hidden>
+      <section class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="crtTitle">
+        <div class="modal-icon"><i class="fa-solid fa-tv" aria-hidden="true"></i></div>
+        <div class="modal-copy"><h2 id="crtTitle">CRT Shader</h2></div>
+        <div class="crt-preview"><canvas id="crtPreview" width="256" height="160"></canvas></div>
+        <div id="crtControls" class="settings-body"></div>
+        <div class="modal-actions">
+          <button id="crtReset" class="btn" type="button"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i><span>Reset</span></button>
+          <button id="crtClose" class="btn btn-warning" type="button"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Done</span></button>
+        </div>
+      </section>
+    </div>
+
     <div id="keyCaptureModal" class="modal-backdrop" hidden>
       <section class="modal-card key-capture-card" role="dialog" aria-modal="true" aria-labelledby="keyCaptureTitle" aria-describedby="keyCaptureHint">
         <div class="modal-icon"><i class="fa-solid fa-keyboard" aria-hidden="true"></i></div>
@@ -255,6 +276,7 @@
     </div>
 
     <script src="../../node_modules/jsnes/dist/jsnes.min.js"></script>
+    <script src="./crt/crt-filter.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

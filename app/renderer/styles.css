@@ -541,6 +541,40 @@ h1 {
   image-rendering: pixelated;
 }
 
+#nes.crt-active canvas:not(.crt-output) {
+  opacity: 0;
+}
+
+#nes:not(.crt-active) canvas.crt-output {
+  display: none;
+}
+
+#nes canvas.crt-output {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.crt-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 256 / 160;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.crt-preview canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.crt-preview .crt-preview-output {
+  z-index: 2;
+}
+
 #nes[data-resolution="1x"] {
   width: min(100%, 256px);
 }

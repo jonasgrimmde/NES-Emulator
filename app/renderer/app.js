@@ -33,6 +33,13 @@ const settingsPathEl = document.getElementById("settingsPath");
 const volumeRange = document.getElementById("volumeRange");
 const volumeValue = document.getElementById("volumeValue");
 const resolutionSelect = document.getElementById("resolutionSelect");
+const crtToggle = document.getElementById("crtToggle");
+const crtCustomize = document.getElementById("crtCustomize");
+const crtModal = document.getElementById("crtModal");
+const crtControls = document.getElementById("crtControls");
+const crtPreview = document.getElementById("crtPreview");
+const crtReset = document.getElementById("crtReset");
+const crtClose = document.getElementById("crtClose");
 const autosaveEnabled = document.getElementById("autosaveEnabled");
 const discordRpcEnabled = document.getElementById("discordRpcEnabled");
 const keybindGrid = document.getElementById("keybindGrid");
@@ -99,6 +106,8 @@ let gameListRenderToken = 0;
 let metaHydrationToken = 0;
 let suppressGameDoubleClickUntil = 0;
 let draggedEntryKey = "";
+let crtFilter = null;
+let crtPreviewFilter = null;
 
 const keybindButtons = [
   ["p1", "UP", "P1 Up"],
@@ -302,10 +311,80 @@ function startAutosaveTimer() {
 
 function applySettings() {
   applyResolution();
+  applyCrtSettings();
   applyVolume();
   applyKeybinds();
   startAutosaveTimer();
   applyDiscordRpcSetting();
+}
+
+function getCrtSettings() {
+  settings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, settings.crt || {});
+  return settings.crt;
+}
+
+function getNesSourceCanvas() {
+  return document.querySelector("#nes canvas:not(.crt-output)");
+}
+
+function ensureCrtFilter() {
+  if (!crtFilter && window.CRTFilter) {
+    try {
+      crtFilter = new window.CRTFilter(document.getElementById("nes"));
+    } catch (error) {
+      console.warn("CRT shader disabled:", error);
+    }
+  }
+  return crtFilter;
+}
+
+function renderCrtFrame() {
+  if (!crtFilter || !settings || !settings.crt || !settings.crt.enabled) {
+    return;
+  }
+  try {
+    crtFilter.render(getNesSourceCanvas());
+  } catch (error) {
+    console.warn("CRT shader render failed:", error);
+    settings.crt.enabled = false;
+    crtFilter.setEnabled(false);
+    if (crtToggle) {
+      crtToggle.querySelector("span").textContent = "CRT Shader OFF";
+    }
+    setStatus("CRT Shader failed and was disabled.");
+  }
+}
+
+function applyCrtSettings() {
+  if (!settings) return;
+  const crt = getCrtSettings();
+  const filter = ensureCrtFilter();
+  if (filter) {
+    filter.setParams(crt);
+    filter.setEnabled(Boolean(crt.enabled));
+    renderCrtFrame();
+  }
+  if (crtToggle) {
+    crtToggle.querySelector("span").textContent = `CRT Shader ${crt.enabled ? "ON" : "OFF"}`;
+  }
+}
+
+function renderCrtPreview() {
+  const ctx = crtPreview.getContext("2d");
+  ctx.fillStyle = "#101010"; ctx.fillRect(0, 0, crtPreview.width, crtPreview.height);
+  ctx.fillStyle = "#d9aa2b"; ctx.fillRect(22, 24, 90, 42);
+  ctx.fillStyle = "#2d67b8"; ctx.fillRect(130, 55, 84, 58);
+  ctx.fillStyle = "#b44242"; ctx.font = "20px monospace"; ctx.fillText("NES CRT", 55, 135);
+  if (!crtPreviewFilter && window.CRTFilter) {
+    const wrap = crtPreview.parentElement;
+    crtPreviewFilter = new window.CRTFilter(wrap);
+    crtPreviewFilter.canvas.classList.add("crt-preview-output");
+  }
+  if (crtPreviewFilter) {
+    crtPreviewFilter.setParams(getCrtSettings());
+    crtPreviewFilter.setEnabled(true);
+    crtPreviewFilter.render(crtPreview);
+  }
 }
 
 function renderKeybindEditor() {
@@ -358,6 +437,7 @@ function renderHotkeyEditor() {
 
 function loadSettingsForm(source) {
   draftSettings = clone(source);
+  draftSettings.crt = Object.assign({}, window.CRT_DEFAULTS || {}, draftSettings.crt || {});
   volumeRange.value = String(draftSettings.audio.volume);
   volumeValue.value = `${draftSettings.audio.volume}%`;
   resolutionSelect.value = draftSettings.video.resolution;
@@ -374,7 +454,43 @@ function collectSettingsForm() {
   draftSettings.autosave.enabled = autosaveEnabled.checked;
   draftSettings.discordRpc = draftSettings.discordRpc || {};
   draftSettings.discordRpc.enabled = discordRpcEnabled.checked;
+  draftSettings.crt = clone(settings.crt || draftSettings.crt || window.CRT_DEFAULTS || {});
   return draftSettings;
+}
+
+const crtFields = [
+  ["scanlineIntensity", "Scanlines", 0, 1, 0.01],
+  ["scanlineCount", "Line count", 50, 1200, 1],
+  ["brightness", "Brightness", 0.5, 2, 0.01],
+  ["contrast", "Contrast", 0.5, 2, 0.01],
+  ["saturation", "Saturation", 0, 2, 0.01],
+  ["bloomIntensity", "Bloom", 0, 1, 0.01],
+  ["rgbShift", "RGB shift", 0, 1, 0.01],
+  ["vignetteStrength", "Vignette", 0, 2, 0.01],
+  ["curvature", "Curvature", 0, 0.5, 0.005],
+  ["flickerStrength", "Flicker", 0, 0.08, 0.001],
+];
+
+function renderCrtControls() {
+  const crt = getCrtSettings();
+  crtControls.innerHTML = "";
+  for (const [key, label, min, max, step] of crtFields) {
+    const row = document.createElement("label");
+    row.className = "settings-row";
+    row.innerHTML = `<span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${crt[key]}"><output>${crt[key]}</output>`;
+    const input = row.querySelector("input");
+    const output = row.querySelector("output");
+    input.addEventListener("input", () => {
+      settings.crt[key] = Number(input.value);
+      if (draftSettings) {
+        draftSettings.crt = settings.crt;
+      }
+      output.value = input.value;
+      applyCrtSettings();
+      renderCrtPreview();
+    });
+    crtControls.append(row);
+  }
 }
 
 function closeSettingsModal() {
@@ -1365,6 +1481,8 @@ async function createBrowser() {
   browser.nes.setFramerate(framesPerSecond);
   syncAudioRate();
   applySettings();
+  ensureCrtFilter();
+  applyCrtSettings();
 }
 
 function syncAudioRate() {
@@ -1427,6 +1545,7 @@ function runFrameLoop(timestamp) {
       browser.nes.frame();
       browser._speakers.flush();
       browser._screen.writeBuffer();
+      renderCrtFrame();
     } catch (error) {
       saveAutoNow("crash");
       stopEmulation();
@@ -2145,6 +2264,41 @@ volumeRange.addEventListener("input", () => {
 resolutionSelect.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.video.resolution = resolutionSelect.value;
+  }
+});
+
+crtToggle.addEventListener("click", () => {
+  settings.crt = getCrtSettings();
+  settings.crt.enabled = !settings.crt.enabled;
+  if (draftSettings) {
+    draftSettings.crt = settings.crt;
+  }
+  applyCrtSettings();
+});
+
+crtCustomize.addEventListener("click", () => {
+  renderCrtControls();
+  renderCrtPreview();
+  crtModal.hidden = false;
+});
+
+crtClose.addEventListener("click", () => {
+  crtModal.hidden = true;
+});
+
+crtReset.addEventListener("click", () => {
+  settings.crt = Object.assign({}, window.CRT_DEFAULTS || {});
+  if (draftSettings) {
+    draftSettings.crt = settings.crt;
+  }
+  renderCrtControls();
+  applyCrtSettings();
+  renderCrtPreview();
+});
+
+crtModal.addEventListener("click", (event) => {
+  if (event.target === crtModal) {
+    crtModal.hidden = true;
   }
 });
 

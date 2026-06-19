@@ -18,6 +18,21 @@ const defaultSettings = {
   video: {
     resolution: "fit",
   },
+  crt: {
+    enabled: false,
+    scanlineIntensity: 0.15,
+    scanlineCount: 400,
+    brightness: 1.1,
+    contrast: 1.05,
+    saturation: 1.1,
+    bloomIntensity: 0.2,
+    bloomThreshold: 0.5,
+    rgbShift: 0,
+    adaptiveIntensity: 0.5,
+    vignetteStrength: 0.3,
+    curvature: 0.15,
+    flickerStrength: 0.01,
+  },
   autosave: {
     enabled: true,
     intervalSeconds: 10,
