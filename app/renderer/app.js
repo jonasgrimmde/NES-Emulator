@@ -271,6 +271,30 @@ function getDiscordEnabled(source) {
   return !source || !source.discordRpc || source.discordRpc.enabled !== false;
 }
 
+function normalizedSettingsForCompare(source) {
+  if (!source) {
+    return null;
+  }
+  const copy = clone(source);
+  copy.crt = Object.assign({}, window.CRT_DEFAULTS || {}, copy.crt || {});
+  copy.autosave = copy.autosave || {};
+  copy.autosave.enabled = getAutosaveEnabled(copy);
+  copy.discordRpc = copy.discordRpc || {};
+  copy.discordRpc.enabled = getDiscordEnabled(copy);
+  return copy;
+}
+
+function refreshSettingsSaveState() {
+  if (!draftSettings || !settings) {
+    settingsSave.disabled = true;
+    return;
+  }
+  settingsSave.disabled = valuesEqual(
+    normalizedSettingsForCompare(draftSettings),
+    normalizedSettingsForCompare(settings),
+  );
+}
+
 function refreshSettingsReverts() {
   if (!draftSettings || !settingsBaseline) {
     return;
@@ -288,27 +312,33 @@ function refreshSettingsReverts() {
     draftSettings.audio.volume = settingsBaseline.audio.volume;
     volumeRange.value = String(draftSettings.audio.volume);
     volumeValue.value = `${draftSettings.audio.volume}%`;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   });
   attach(resolutionSelect.closest(".settings-row"), !valuesEqual(draftSettings.video.resolution, settingsBaseline.video.resolution), "Resolution", () => {
     draftSettings.video.resolution = settingsBaseline.video.resolution;
     resolutionSelect.value = draftSettings.video.resolution;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   });
-  attach(crtToggle.closest(".settings-command"), !valuesEqual(Boolean(draftSettings.crt.enabled), Boolean(getBaselineCrtSettings().enabled)), "CRT Shader", () => {
+  attach(crtToggle.closest(".settings-toggle"), !valuesEqual(Boolean(draftSettings.crt.enabled), Boolean(getBaselineCrtSettings().enabled)), "CRT Shader", () => {
     draftSettings.crt.enabled = Boolean(getBaselineCrtSettings().enabled);
     settings.crt = draftSettings.crt;
+    crtToggle.checked = draftSettings.crt.enabled;
     applyCrtSettings();
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   });
   attach(autosaveEnabled.closest(".settings-toggle"), !valuesEqual(getAutosaveEnabled(draftSettings), getAutosaveEnabled(settingsBaseline)), "Auto-Save", () => {
     draftSettings.autosave.enabled = getAutosaveEnabled(settingsBaseline);
     autosaveEnabled.checked = draftSettings.autosave.enabled;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   });
   attach(discordRpcEnabled.closest(".settings-toggle"), !valuesEqual(getDiscordEnabled(draftSettings), getDiscordEnabled(settingsBaseline)), "Rich Presence", () => {
     draftSettings.discordRpc.enabled = getDiscordEnabled(settingsBaseline);
     discordRpcEnabled.checked = draftSettings.discordRpc.enabled;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   });
 }
@@ -428,9 +458,7 @@ function renderCrtFrame() {
     console.warn("CRT shader render failed:", error);
     settings.crt.enabled = false;
     crtFilter.setEnabled(false);
-    if (crtToggle) {
-      crtToggle.querySelector("span").textContent = "CRT Shader OFF";
-    }
+    crtToggle.checked = false;
     setStatus("CRT Shader failed and was disabled.");
   }
 }
@@ -444,9 +472,7 @@ function applyCrtSettings() {
     filter.setEnabled(Boolean(crt.enabled));
     renderCrtFrame();
   }
-  if (crtToggle) {
-    crtToggle.querySelector("span").textContent = `CRT Shader ${crt.enabled ? "ON" : "OFF"}`;
-  }
+  crtToggle.checked = Boolean(crt.enabled);
 }
 
 function renderCrtPreview() {
@@ -541,6 +567,7 @@ function renderKeybindEditor() {
     const revert = createSettingRevertButton(!valuesEqual(keybind, baseline), label, () => {
       draftSettings.keybinds[group][button] = clone(baseline);
       renderKeybindEditor();
+      refreshSettingsSaveState();
     });
     item.append(buttonEl, revert);
     keybindGrid.append(item);
@@ -572,6 +599,7 @@ function renderHotkeyEditor() {
     const revert = createSettingRevertButton(!valuesEqual(hotkey, baseline), label, () => {
       draftSettings.hotkeys[action] = clone(baseline);
       renderHotkeyEditor();
+      refreshSettingsSaveState();
     });
     item.append(buttonEl, revert);
     hotkeyGrid.append(item);
@@ -590,9 +618,11 @@ function loadSettingsForm(source) {
   resolutionSelect.value = draftSettings.video.resolution;
   autosaveEnabled.checked = draftSettings.autosave.enabled;
   discordRpcEnabled.checked = draftSettings.discordRpc.enabled;
+  crtToggle.checked = Boolean(draftSettings.crt.enabled);
   renderKeybindEditor();
   renderHotkeyEditor();
   refreshSettingsReverts();
+  refreshSettingsSaveState();
 }
 
 function collectSettingsForm() {
@@ -639,6 +669,7 @@ function renderCrtControls() {
       revert.hidden = true;
       applyCrtSettings();
       renderCrtPreview();
+      refreshSettingsSaveState();
     });
     input.addEventListener("input", () => {
       settings.crt[key] = Number(input.value);
@@ -649,6 +680,7 @@ function renderCrtControls() {
       revert.hidden = valuesEqual(Number(settings.crt[key]), Number(baselineCrt[key]));
       applyCrtSettings();
       renderCrtPreview();
+      refreshSettingsSaveState();
     });
     row.append(revert);
     crtControls.append(row);
@@ -805,6 +837,7 @@ function setCapturedBinding(binding) {
     draftSettings.hotkeys[keyCaptureTargetInfo.action] = binding;
     renderHotkeyEditor();
   }
+  refreshSettingsSaveState();
   closeKeyCaptureModal();
 }
 
@@ -2459,6 +2492,7 @@ volumeRange.addEventListener("input", () => {
   volumeValue.value = `${volumeRange.value}%`;
   if (draftSettings) {
     draftSettings.audio.volume = Number(volumeRange.value);
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   }
 });
@@ -2466,17 +2500,19 @@ volumeRange.addEventListener("input", () => {
 resolutionSelect.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.video.resolution = resolutionSelect.value;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   }
 });
 
-crtToggle.addEventListener("click", () => {
+crtToggle.addEventListener("change", () => {
   settings.crt = getCrtSettings();
-  settings.crt.enabled = !settings.crt.enabled;
+  settings.crt.enabled = crtToggle.checked;
   if (draftSettings) {
     draftSettings.crt = settings.crt;
   }
   applyCrtSettings();
+  refreshSettingsSaveState();
   refreshSettingsReverts();
 });
 
@@ -2499,6 +2535,7 @@ crtReset.addEventListener("click", () => {
   renderCrtControls();
   applyCrtSettings();
   renderCrtPreview();
+  refreshSettingsSaveState();
 });
 
 crtModal.addEventListener("click", (event) => {
@@ -2518,6 +2555,7 @@ if (crtPreviewImage) {
 autosaveEnabled.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.autosave.enabled = autosaveEnabled.checked;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   }
 });
@@ -2526,6 +2564,7 @@ discordRpcEnabled.addEventListener("change", () => {
   if (draftSettings) {
     draftSettings.discordRpc = draftSettings.discordRpc || {};
     draftSettings.discordRpc.enabled = discordRpcEnabled.checked;
+    refreshSettingsSaveState();
     refreshSettingsReverts();
   }
 });
@@ -2536,6 +2575,7 @@ settingsDefaults.addEventListener("click", async () => {
     defaults.crt = Object.assign({}, window.CRT_DEFAULTS || {}, defaults.crt || {});
     settingsBaseline = clone(defaults);
     loadSettingsForm(defaults);
+    refreshSettingsSaveState();
     setStatus("Default settings loaded in the modal.");
   } catch (error) {
     setStatus(error.message || String(error));
@@ -2552,6 +2592,8 @@ settingsSave.addEventListener("click", async () => {
     const result = await window.nesApp.writeSettings(collectSettingsForm());
     settings = result.settings;
     settingsPath = result.path;
+    draftSettings = clone(settings);
+    refreshSettingsSaveState();
     applySettings();
     closeSettingsModal();
     setStatus("Settings saved.");
