@@ -82,6 +82,26 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "Start {#MyAppName} now"; Flags: nowait postinstall
 
 [Code]
+var
+  KeepUserData: Boolean;
+
+function HasUninstallParam(const Name: string): Boolean;
+var
+  I: Integer;
+  Value: string;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+  begin
+    Value := ParamStr(I);
+    if (CompareText(Value, '/' + Name) = 0) or (CompareText(Value, '-' + Name) = 0) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
 procedure TryRemoveDirIfEmpty(const DirName: string);
 begin
   if DirExists(DirName) then
@@ -90,10 +110,54 @@ begin
   end;
 end;
 
+procedure RemoveUserData;
+begin
+  DelTree(ExpandConstant('{app}'), True, True, True);
+end;
+
+procedure AskKeepUserData;
+begin
+  KeepUserData :=
+    MsgBox(
+      'Do you want to keep your user data?' #13#13 +
+      'Yes = keep Games, Saves, User Data, and settings.json' #13#13 +
+      'No = delete all user data',
+      mbConfirmation,
+      MB_YESNO
+    ) = IDYES;
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  KeepUserData := True;
+
+  if HasUninstallParam('DELETEUSERDATA') then
+  begin
+    KeepUserData := False;
+    Result := True;
+    Exit;
+  end;
+
+  if HasUninstallParam('KEEPUSERDATA') or UninstallSilent then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  AskKeepUserData;
+  Result := True;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
   begin
+    if not KeepUserData then
+    begin
+      RemoveUserData;
+    end;
+
+    TryRemoveDirIfEmpty(ExpandConstant('{app}'));
     TryRemoveDirIfEmpty(ExpandConstant('{userappdata}\jonasgrimm.de'));
   end;
 end;

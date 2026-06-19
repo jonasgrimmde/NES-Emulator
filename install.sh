@@ -78,6 +78,18 @@ fail() {
   exit 1
 }
 
+prompt_input() {
+  prompt="$1"
+  if [ -r /dev/tty ]; then
+    printf '%s' "$prompt" >/dev/tty
+    IFS= read -r prompt_answer </dev/tty
+  else
+    printf '%s' "$prompt"
+    IFS= read -r prompt_answer
+  fi
+  printf '%s' "$prompt_answer"
+}
+
 download() {
   url="$1"
   target="$2"
@@ -170,14 +182,25 @@ fetch_manifest() {
 
 confirm_action() {
   prompt="$1"
-  printf '%s [y/N] ' "$prompt"
-  read answer
+  answer="$(prompt_input "$prompt [y/N] ")"
   case "$answer" in
     y|Y|yes|YES|Yes)
       return 0
       ;;
     *)
       return 1
+      ;;
+  esac
+}
+
+confirm_keep_user_data() {
+  answer="$(prompt_input "Keep user data (Games, Saves, User Data, settings.json)? [Y/n] ")"
+  case "$answer" in
+    n|N|no|NO|No)
+      return 1
+      ;;
+    *)
+      return 0
       ;;
   esac
 }
@@ -208,8 +231,8 @@ show_menu() {
 
   printf '1 - %s\n' "$install_label"
   printf '2 - Uninstall\n'
-  printf '\nChoose an option: '
-  read choice
+  printf '\n'
+  choice="$(prompt_input "Choose an option: ")"
 
   case "$choice" in
     1)
@@ -314,6 +337,11 @@ uninstall_app() {
     return
   fi
 
+  keep_user_data=1
+  if [ -e "$APP_DATA_DIR" ] && ! confirm_keep_user_data; then
+    keep_user_data=0
+  fi
+
   rm -f "$APPIMAGE_PATH" "$VERSION_PATH" "$BIN_PATH" "$DESKTOP_PATH" "$ICON_PATH"
   rmdir "$INSTALL_DIR" >/dev/null 2>&1 || true
 
@@ -322,8 +350,14 @@ uninstall_app() {
   fi
 
   ok "${APP_NAME} uninstalled."
-  printf '%s\n' "$(color dim "Your app data was kept at: $APP_DATA_DIR")"
-  printf '%s\n' "$(color dim "Delete it manually if you also want to remove games, saves, and settings.")"
+  if [ "$keep_user_data" -eq 1 ]; then
+    printf '%s\n' "$(color dim "Your app data was kept at: $APP_DATA_DIR")"
+    printf '%s\n' "$(color dim "Delete it manually if you also want to remove games, saves, and settings.")"
+  else
+    rm -rf "$APP_DATA_DIR"
+    rmdir "${CONFIG_HOME}/jonasgrimm.de" >/dev/null 2>&1 || true
+    ok "User data removed."
+  fi
 }
 
 print_help() {

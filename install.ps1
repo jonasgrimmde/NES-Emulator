@@ -104,6 +104,11 @@ function Confirm-Action($Text) {
   return $answer -match '(?i)^y(es)?$'
 }
 
+function Confirm-KeepUserData {
+  $answer = Read-Host "Keep user data (Games, Saves, User Data, settings.json)? [Y/n]"
+  return $answer -notmatch '(?i)^n(o)?$'
+}
+
 function Show-Menu {
   Write-Title
   $installed = Get-InstalledInfo
@@ -239,6 +244,11 @@ function Uninstall-App {
   }
 
   Write-Step "Uninstalling $AppName..."
+  $keepUserData = $true
+  if (Test-Path $InstallRoot) {
+    $keepUserData = Confirm-KeepUserData
+  }
+
   $uninstallArgs = @()
   if ($existingArgs) {
     $uninstallArgs += $existingArgs
@@ -246,6 +256,11 @@ function Uninstall-App {
   $uninstallArgs += "/SILENT"
   $uninstallArgs += "/NORESTART"
   $uninstallArgs += "/SUPPRESSMSGBOXES"
+  if ($keepUserData) {
+    $uninstallArgs += "/KEEPUSERDATA"
+  } else {
+    $uninstallArgs += "/DELETEUSERDATA"
+  }
 
   $process = Start-Process -FilePath $uninstaller -ArgumentList $uninstallArgs -Wait -PassThru
   if ($process.ExitCode -ne 0) {
@@ -253,7 +268,11 @@ function Uninstall-App {
   }
 
   Write-Ok "$AppName uninstalled."
-  Write-Host "Your games, saves, and settings may remain at: $InstallRoot" -ForegroundColor DarkGray
+  if ($keepUserData) {
+    Write-Host "Your games, saves, and settings were kept at: $InstallRoot" -ForegroundColor DarkGray
+  } else {
+    Write-Ok "User data removed."
+  }
 }
 
 function Show-Help {
