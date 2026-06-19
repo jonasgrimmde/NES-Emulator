@@ -37,6 +37,7 @@ const crtToggle = document.getElementById("crtToggle");
 const crtCustomize = document.getElementById("crtCustomize");
 const crtModal = document.getElementById("crtModal");
 const crtControls = document.getElementById("crtControls");
+const crtPreviewImage = document.getElementById("crtPreviewImage");
 const crtPreview = document.getElementById("crtPreview");
 const crtReset = document.getElementById("crtReset");
 const crtClose = document.getElementById("crtClose");
@@ -372,6 +373,41 @@ function applyCrtSettings() {
 function renderCrtPreview() {
   const ctx = crtPreview.getContext("2d");
   ctx.imageSmoothingEnabled = false;
+  if (crtPreviewImage && crtPreviewImage.complete && crtPreviewImage.naturalWidth) {
+    drawCover(ctx, crtPreviewImage, crtPreview.width, crtPreview.height);
+  } else {
+    drawCrtPreviewFallback(ctx);
+  }
+  if (!crtPreviewFilter && window.CRTFilter) {
+    const wrap = crtPreview.parentElement;
+    crtPreviewFilter = new window.CRTFilter(wrap);
+    crtPreviewFilter.canvas.classList.add("crt-preview-output");
+  }
+  if (crtPreviewFilter) {
+    crtPreviewFilter.setParams(getCrtSettings());
+    crtPreviewFilter.setEnabled(true);
+    crtPreviewFilter.render(crtPreview);
+  }
+}
+
+function drawCover(ctx, source, targetWidth, targetHeight) {
+  const sourceWidth = source.naturalWidth || source.videoWidth || source.width;
+  const sourceHeight = source.naturalHeight || source.videoHeight || source.height;
+  if (!sourceWidth || !sourceHeight) {
+    drawCrtPreviewFallback(ctx);
+    return;
+  }
+  const scale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const width = Math.ceil(sourceWidth * scale);
+  const height = Math.ceil(sourceHeight * scale);
+  const x = Math.floor((targetWidth - width) / 2);
+  const y = Math.floor((targetHeight - height) / 2);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(source, x, y, width, height);
+}
+
+function drawCrtPreviewFallback(ctx) {
   ctx.fillStyle = "#050505";
   ctx.fillRect(0, 0, crtPreview.width, crtPreview.height);
   ctx.fillStyle = "#1a1a1a";
@@ -393,16 +429,10 @@ function renderCrtPreview() {
   ctx.fillText("CRT TEST", 52, 190);
   ctx.font = "12px monospace";
   ctx.fillText("PIXEL GRID 240P", 70, 210);
-  if (!crtPreviewFilter && window.CRTFilter) {
-    const wrap = crtPreview.parentElement;
-    crtPreviewFilter = new window.CRTFilter(wrap);
-    crtPreviewFilter.canvas.classList.add("crt-preview-output");
-  }
-  if (crtPreviewFilter) {
-    crtPreviewFilter.setParams(getCrtSettings());
-    crtPreviewFilter.setEnabled(true);
-    crtPreviewFilter.render(crtPreview);
-  }
+}
+
+function closeCrtModal() {
+  crtModal.hidden = true;
 }
 
 function renderKeybindEditor() {
@@ -2301,7 +2331,7 @@ crtCustomize.addEventListener("click", () => {
 });
 
 crtClose.addEventListener("click", () => {
-  crtModal.hidden = true;
+  closeCrtModal();
 });
 
 crtReset.addEventListener("click", () => {
@@ -2316,9 +2346,17 @@ crtReset.addEventListener("click", () => {
 
 crtModal.addEventListener("click", (event) => {
   if (event.target === crtModal) {
-    crtModal.hidden = true;
+    closeCrtModal();
   }
 });
+
+if (crtPreviewImage) {
+  crtPreviewImage.addEventListener("load", () => {
+    if (!crtModal.hidden) {
+      renderCrtPreview();
+    }
+  });
+}
 
 autosaveEnabled.addEventListener("change", () => {
   if (draftSettings) {
