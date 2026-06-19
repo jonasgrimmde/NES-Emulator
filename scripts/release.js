@@ -85,6 +85,7 @@ function readJson(filePath) {
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
+
 function commandForSpawn(command) {
   if (process.platform !== "win32") return command;
   if (command === "npm" || command === "npx") {
@@ -92,6 +93,7 @@ function commandForSpawn(command) {
   }
   return command;
 }
+
 function run(command, args, options = {}) {
   const startedAt = Date.now();
   logStep(`${command} ${args.join(" ")}`);
@@ -203,22 +205,11 @@ function yamlQuote(value) {
   return JSON.stringify(String(value));
 }
 
-function createLatestManifest({
-  pkg,
-  setupPath,
-  portablePath,
-  version,
-  owner,
-  repo,
-}) {
+function createLatestManifest({ pkg, setupPath, version, owner, repo }) {
   const setupName = path.basename(setupPath);
   const tag = `v${version}`;
   const releaseDate = new Date().toISOString();
   const downloadUrl = `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(setupName)}`;
-  const portableName = portablePath ? path.basename(portablePath) : "";
-  const portableUrl = portablePath
-    ? `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(portableName)}`
-    : "";
   const size = fs.statSync(setupPath).size;
   const sha256 = fileHash(setupPath, "sha256");
   const sha512 = fileHashBase64(setupPath, "sha512");
@@ -228,7 +219,6 @@ function createLatestManifest({
     `repo: ${yamlQuote(`${owner}/${repo}`)}`,
     `path: ${yamlQuote(setupName)}`,
     `url: ${yamlQuote(downloadUrl)}`,
-    `url-portable: ${yamlQuote(portableUrl)}`,
     `sha256: ${yamlQuote(sha256)}`,
     `sha512: ${yamlQuote(sha512)}`,
     `size: ${size}`,
@@ -268,75 +258,7 @@ function createInstallerUploadCopy(setupPath) {
 
   return uploadPath;
 }
-function find7Zip() {
-  const candidates = [
-    "7z",
-    "7z.exe",
-    path.join(process.env.ProgramFiles || "", "7-Zip", "7z.exe"),
-    path.join(process.env["ProgramFiles(x86)"] || "", "7-Zip", "7z.exe"),
-  ].filter(Boolean);
 
-  for (const candidate of candidates) {
-    const result = spawnSync(candidate, ["i"], {
-      encoding: "utf8",
-      shell: candidate === "7z" || candidate === "7z.exe",
-    });
-
-    if (result.status === 0) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function createPortableArchive() {
-  logHeader("Portable archive");
-
-  const unpackedPath = path.join(rootDir, "dist", "win-unpacked");
-  const archivePath = path.join(
-    rootDir,
-    "dist",
-    "installer",
-    "NES-Emulator-Windows.7z",
-  );
-
-  if (!fs.existsSync(unpackedPath)) {
-    throw new Error(`Unpacked app folder not found: ${unpackedPath}`);
-  }
-
-  fs.rmSync(archivePath, { force: true });
-
-  const sevenZip = find7Zip();
-  if (!sevenZip) {
-    throw new Error(
-      "7-Zip was not found. Install 7-Zip or add 7z.exe to PATH.",
-    );
-  }
-
-  const startedAt = Date.now();
-  logStep(`Create ${path.relative(rootDir, archivePath)}`);
-
-  const result = spawnSync(sevenZip, ["a", "-t7z", "-mx=5", archivePath, "."], {
-    cwd: unpackedPath,
-    stdio: "inherit",
-    shell: sevenZip === "7z" || sevenZip === "7z.exe",
-  });
-
-  if (result.status !== 0) {
-    throw new Error("Creating portable 7z archive failed.");
-  }
-
-  logSuccess(
-    `Created ${path.relative(rootDir, archivePath)} in ${formatDuration(startedAt)}`,
-  );
-  logInfo(
-    "Portable",
-    `${path.relative(rootDir, archivePath)} (${formatBytes(fs.statSync(archivePath).size)})`,
-  );
-
-  return archivePath;
-}
 function getGitHubToken() {
   if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
@@ -617,8 +539,6 @@ async function main() {
   run("npm", ["run", "pack"]);
   run("npm", ["run", "setup"]);
 
-  const portablePath = createPortableArchive();
-
   const setupPath = path.join(
     rootDir,
     "dist",
@@ -639,7 +559,6 @@ async function main() {
   const manifest = createLatestManifest({
     pkg,
     setupPath: setupUploadPath,
-    portablePath,
     version: nextVersion,
     owner,
     repo,
@@ -669,17 +588,13 @@ async function main() {
   });
   logSuccess(`Release ready: ${release.html_url || manifest.tag}`);
 
+  await deleteExistingAsset(token, release, "NES-Emulator-Windows.7z");
+
   await uploadAsset(
     token,
     release,
     setupUploadPath,
     "application/vnd.microsoft.portable-executable",
-  );
-  await uploadAsset(
-    token,
-    release,
-    portablePath,
-    "application/x-7z-compressed",
   );
   await uploadAsset(
     token,
@@ -697,7 +612,6 @@ async function main() {
   );
   logInfo("Tag", manifest.tag);
   logInfo("Setup", manifest.setupName);
-  logInfo("Portable", path.basename(portablePath));
   logInfo("SHA256", manifest.sha256);
 }
 
