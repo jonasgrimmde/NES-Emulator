@@ -51,9 +51,20 @@ function Get-ManifestValue($Text, $Key) {
   return $match.Groups[1].Value.Trim().Trim('"')
 }
 
+function Convert-WebContentToText($Content) {
+  if ($Content -is [byte[]]) {
+    return [System.Text.Encoding]::UTF8.GetString($Content)
+  }
+  if ($null -eq $Content) {
+    return ""
+  }
+  return [string] $Content
+}
+
 function Get-LatestManifest {
   Write-Step "Checking latest release..."
-  return Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl | Select-Object -ExpandProperty Content
+  $response = Invoke-WebRequest -UseBasicParsing -Uri $ManifestUrl
+  return Convert-WebContentToText $response.Content
 }
 
 function Get-LatestVersion($Manifest) {
