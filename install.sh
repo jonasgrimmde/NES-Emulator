@@ -25,7 +25,7 @@ BIN_PATH="$BIN_DIR/nes-emulator"
 DESKTOP_PATH="$APPLICATIONS_DIR/${APP_ID}.desktop"
 ICON_PATH="$ICON_DIR/${APP_ID}.png"
 
-ACTION="${1:-install}"
+ACTION="${1:-menu}"
 
 color_enabled=0
 if [ -t 1 ]; then
@@ -168,6 +168,72 @@ fetch_manifest() {
   download "$MANIFEST_URL" "$target"
 }
 
+confirm_action() {
+  prompt="$1"
+  printf '%s [y/N] ' "$prompt"
+  read answer
+  case "$answer" in
+    y|Y|yes|YES|Yes)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+show_menu() {
+  title
+  tmp_manifest="$(mktemp)"
+  trap 'rm -f "$tmp_manifest"' EXIT
+
+  installed_version="$(get_installed_version)"
+  latest_version="unknown"
+  if fetch_manifest "$tmp_manifest"; then
+    latest_version="$(get_latest_version "$tmp_manifest")"
+  else
+    warn "Could not check latest release."
+  fi
+
+  printf '%s %s\n' "$(color dim 'Installed')" "$installed_version"
+  printf '%s %s\n' "$(color dim 'Latest   ')" "$latest_version"
+  printf '\n'
+
+  install_label="Install"
+  if is_installed && [ "$latest_version" != "unknown" ] && [ "$installed_version" != "$latest_version" ]; then
+    install_label="Update"
+  fi
+
+  printf '1 - %s\n' "$install_label"
+  printf '2 - Uninstall\n'
+  printf '\nChoose an option: '
+  read choice
+
+  case "$choice" in
+    1)
+      if confirm_action "Run ${install_label}?"; then
+        rm -f "$tmp_manifest"
+        trap - EXIT
+        install_app
+      else
+        warn "Cancelled."
+      fi
+      ;;
+    2)
+      if confirm_action "Run Uninstall?"; then
+        rm -f "$tmp_manifest"
+        trap - EXIT
+        uninstall_app
+      else
+        warn "Cancelled."
+      fi
+      ;;
+    *)
+      fail "Unknown option: $choice"
+      ;;
+  esac
+}
+
 install_app() {
   title
   mkdir -p "$INSTALL_DIR"
@@ -262,7 +328,7 @@ print_help() {
   title
   cat <<EOF
 Usage:
-  sh install.sh              Install or update ${APP_NAME}
+  sh install.sh              Show install/update and uninstall menu
   sh install.sh install      Install or update ${APP_NAME}
   sh install.sh update       Install or update ${APP_NAME}
   sh install.sh status       Show installed and latest version
@@ -277,6 +343,9 @@ EOF
 }
 
 case "$ACTION" in
+  menu)
+    show_menu
+    ;;
   install|update)
     install_app
     ;;

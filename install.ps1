@@ -1,6 +1,6 @@
 param(
-  [ValidateSet("install", "update", "status", "uninstall", "help")]
-  [string] $Action = "install"
+  [ValidateSet("menu", "install", "update", "status", "uninstall", "help")]
+  [string] $Action = "menu"
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,6 +97,58 @@ function Get-InstalledInfo {
 function Show-Paths {
   Write-Host ("{0,-12} {1}" -f "App", $ExePath) -ForegroundColor DarkGray
   Write-Host ("{0,-12} {1}" -f "App data", $InstallRoot) -ForegroundColor DarkGray
+}
+
+function Confirm-Action($Text) {
+  $answer = Read-Host "$Text [y/N]"
+  return $answer -match '(?i)^y(es)?$'
+}
+
+function Show-Menu {
+  Write-Title
+  $installed = Get-InstalledInfo
+  $latestVersion = "unknown"
+
+  try {
+    $manifest = Get-LatestManifest
+    $latestVersion = Get-LatestVersion $manifest
+  } catch {
+    Write-Warn "Could not check latest release: $($_.Exception.Message)"
+  }
+
+  Write-Host ("{0,-12} {1}" -f "Installed", $(if ($installed.Installed) { $installed.Version } else { "not installed" })) -ForegroundColor DarkGray
+  Write-Host ("{0,-12} {1}" -f "Latest", $latestVersion) -ForegroundColor DarkGray
+  Write-Host ""
+
+  $installLabel = "Install"
+  if ($installed.Installed -and $latestVersion -ne "unknown" -and $installed.Version -ne $latestVersion) {
+    $installLabel = "Update"
+  }
+
+  Write-Host "1 - $installLabel"
+  Write-Host "2 - Uninstall"
+  Write-Host ""
+
+  $choice = Read-Host "Choose an option"
+  switch ($choice) {
+    "1" {
+      if (Confirm-Action "Run $installLabel?") {
+        Install-App
+      } else {
+        Write-Warn "Cancelled."
+      }
+    }
+    "2" {
+      if (Confirm-Action "Run Uninstall?") {
+        Uninstall-App
+      } else {
+        Write-Warn "Cancelled."
+      }
+    }
+    default {
+      Write-Fail "Unknown option: $choice"
+    }
+  }
 }
 
 function Install-App {
@@ -207,6 +259,7 @@ function Show-Help {
   Write-Host "Usage:"
   Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1"
   Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1 status"
+  Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1 install"
   Write-Host "  powershell -ExecutionPolicy Bypass -File install.ps1 uninstall"
   Write-Host ""
   Write-Host "Remote one-liners:"
@@ -216,6 +269,7 @@ function Show-Help {
 }
 
 switch ($Action) {
+  "menu" { Show-Menu }
   "install" { Install-App }
   "update" { Install-App }
   "status" { Show-Status }
